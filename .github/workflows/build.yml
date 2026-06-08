@@ -22,11 +22,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: wrapper
-
       # ── Copy vendored snapclient binaries into assets ─────────────────────
       # Two sets of binaries are bundled:
       #   snapclient_<abi>        — current (updated by sync_snapdroid workflow)

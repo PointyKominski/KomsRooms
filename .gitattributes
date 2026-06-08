@@ -15,6 +15,8 @@ app/src/main/assets/snapclient_* binary
 
 # Shell scripts — LF only (so they work on Linux/CI)
 *.sh     text eol=lf
+gradlew  text eol=lf
+gradlew.bat text eol=crlf
 
 # Everything else — auto
 *        text=auto
