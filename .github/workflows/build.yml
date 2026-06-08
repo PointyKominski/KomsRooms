@@ -77,6 +77,9 @@ jobs:
           echo ""
           ls -lah app/src/main/assets/
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
