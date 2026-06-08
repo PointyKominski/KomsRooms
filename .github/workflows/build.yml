@@ -1,0 +1,100 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # lets you trigger a build manually from GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download Gradle wrapper jar
+        run: |
+          mkdir -p gradle/wrapper
+          # The gradle-wrapper.jar is a small bootstrap; download from Gradle's own CDN
+          curl -sL "https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar" \
+            -o gradle/wrapper/gradle-wrapper.jar || \
+          wget -q "https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar" \
+            -O gradle/wrapper/gradle-wrapper.jar
+          ls -lah gradle/wrapper/
+
+      # ── Fetch snapclient binaries from Snapdroid release ─────────────────
+      # Snapdroid is the official Android Snapcast client by the same author.
+      # We download the signed APK, unzip it, and extract the native snapclient
+      # binary for each ABI so we can bundle it into our own APK.
+      - name: Fetch snapclient binaries from Snapdroid
+        run: |
+          set -e
+          SNAPDROID_URL="https://github.com/badaix/snapdroid/releases/download/v0.29.0.2/Snapcast-signed-v0.29.0.2.apk"
+          echo "Downloading Snapdroid APK..."
+          wget -q "$SNAPDROID_URL" -O snapdroid.apk
+
+          echo "Extracting APK contents..."
+          unzip -q snapdroid.apk -d snapdroid_extracted
+
+          echo "APK contents:"
+          find snapdroid_extracted -type f | sort
+
+          mkdir -p app/src/main/assets
+
+          # Native libraries land in lib/<ABI>/
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            # Try both common names: snapclient and libsnapclient
+            for NAME in snapclient snapclient_aarch64 snapclient_armv7; do
+              SRC="snapdroid_extracted/lib/$ABI/$NAME"
+              if [ -f "$SRC" ]; then
+                cp "$SRC" "app/src/main/assets/snapclient_$ABI"
+                echo "Copied $SRC → snapclient_$ABI"
+                break
+              fi
+            done
+            # Also check assets/
+            for NAME in snapclient snapclient_$ABI; do
+              SRC="snapdroid_extracted/assets/$NAME"
+              if [ -f "$SRC" ] && [ ! -f "app/src/main/assets/snapclient_$ABI" ]; then
+                cp "$SRC" "app/src/main/assets/snapclient_$ABI"
+                echo "Copied from assets: $SRC → snapclient_$ABI"
+                break
+              fi
+            done
+          done
+
+          echo "Assets after extraction:"
+          ls -lah app/src/main/assets/ || echo "(empty — binary names may differ, check APK contents above)"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KomsRooms-debug-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Build release APK (unsigned)
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KomsRooms-release-unsigned-${{ github.run_number }}
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30
