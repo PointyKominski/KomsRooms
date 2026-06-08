@@ -19,15 +19,23 @@
             android:textColor="@color/white"
             android:textSize="36sp"
             android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="4dp" />
 
+        <!-- Version label — tap 7 times to open dev panel -->
         <TextView
+            android:id="@+id/tvVersion"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Enter your Pi's details to connect"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:layout_marginBottom="40dp" />
+            android:text="v—"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="32dp"
+            android:clickable="true"
+            android:focusable="true" />
 
         <TextView
             android:layout_width="match_parent"
@@ -125,6 +133,66 @@
             android:backgroundTint="@color/accent"
             android:textColor="@color/white"
             android:cornerRadius="12dp" />
+
+        <!-- ═══ Hidden developer panel — revealed by 7-tapping the version label ═══ -->
+        <LinearLayout
+            android:id="@+id/devPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="#1A8B5CF6"
+            android:padding="16dp"
+            android:layout_marginTop="32dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Developer Options"
+                android:textColor="@color/accent"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/devBinaryStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/btnUseStable"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Switch to stable"
+                android:textSize="14sp"
+                android:backgroundTint="#2A2A2A"
+                android:textColor="@color/white"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/btnUseCurrent"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Switch to current"
+                android:textSize="14sp"
+                android:backgroundTint="#2A2A2A"
+                android:textColor="@color/white"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/btnPromoteToStable"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="How to promote current → stable"
+                android:textSize="13sp"
+                android:backgroundTint="#1A1A1A"
+                android:textColor="@color/text_secondary" />
+
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

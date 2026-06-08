@@ -25,56 +25,61 @@ jobs:
       - name: Download Gradle wrapper jar
         run: |
           mkdir -p gradle/wrapper
-          # The gradle-wrapper.jar is a small bootstrap; download from Gradle's own CDN
           curl -sL "https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar" \
             -o gradle/wrapper/gradle-wrapper.jar || \
           wget -q "https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar" \
             -O gradle/wrapper/gradle-wrapper.jar
           ls -lah gradle/wrapper/
 
-      # ── Fetch snapclient binaries from Snapdroid release ─────────────────
-      # Snapdroid is the official Android Snapcast client by the same author.
-      # We download the signed APK, unzip it, and extract the native snapclient
-      # binary for each ABI so we can bundle it into our own APK.
-      - name: Fetch snapclient binaries from Snapdroid
+      # ── Copy vendored snapclient binaries into assets ─────────────────────
+      # Two sets of binaries are bundled:
+      #   snapclient_<abi>        — current (updated by sync_snapdroid workflow)
+      #   snapclient_stable_<abi> — pinned fallback (promoted manually via promote_stable.sh)
+      # The in-app developer panel (7-tap on version label) switches between them.
+      - name: Copy vendored snapclient binaries to assets
         run: |
           set -e
-          SNAPDROID_URL="https://github.com/badaix/snapdroid/releases/download/v0.29.0.2/Snapcast-signed-v0.29.0.2.apk"
-          echo "Downloading Snapdroid APK..."
-          wget -q "$SNAPDROID_URL" -O snapdroid.apk
-
-          echo "Extracting APK contents..."
-          unzip -q snapdroid.apk -d snapdroid_extracted
-
-          echo "APK contents:"
-          find snapdroid_extracted -type f | sort
-
           mkdir -p app/src/main/assets
 
-          # Native libraries land in lib/<ABI>/
-          for ABI in arm64-v8a armeabi-v7a x86_64; do
-            # Try both common names: snapclient and libsnapclient
-            for NAME in snapclient snapclient_aarch64 snapclient_armv7; do
-              SRC="snapdroid_extracted/lib/$ABI/$NAME"
-              if [ -f "$SRC" ]; then
-                cp "$SRC" "app/src/main/assets/snapclient_$ABI"
-                echo "Copied $SRC → snapclient_$ABI"
-                break
-              fi
-            done
-            # Also check assets/
-            for NAME in snapclient snapclient_$ABI; do
-              SRC="snapdroid_extracted/assets/$NAME"
-              if [ -f "$SRC" ] && [ ! -f "app/src/main/assets/snapclient_$ABI" ]; then
-                cp "$SRC" "app/src/main/assets/snapclient_$ABI"
-                echo "Copied from assets: $SRC → snapclient_$ABI"
-                break
-              fi
-            done
+          CURRENT_VER=$(head -1 vendor/snapclient/VERSION | tr -d '[:space:]')
+          STABLE_VER=$(head -1 vendor/snapclient_stable/VERSION 2>/dev/null | tr -d '[:space:]' || echo "none")
+
+          echo "Current version: $CURRENT_VER"
+          echo "Stable version:  $STABLE_VER"
+
+          # Current binaries
+          for ABI in arm64-v8a armeabi-v7a; do
+            SRC="vendor/snapclient/snapclient_$ABI"
+            if [ -f "$SRC" ]; then
+              cp "$SRC" "app/src/main/assets/snapclient_$ABI"
+              chmod +x "app/src/main/assets/snapclient_$ABI"
+              echo "✓ snapclient_$ABI (current)"
+            else
+              echo "⚠ $SRC not found — run scripts/fetch_snapclient.sh and commit"
+              exit 1
+            fi
           done
 
-          echo "Assets after extraction:"
-          ls -lah app/src/main/assets/ || echo "(empty — binary names may differ, check APK contents above)"
+          # Stable/fallback binaries
+          for ABI in arm64-v8a armeabi-v7a; do
+            SRC="vendor/snapclient_stable/snapclient_$ABI"
+            if [ -f "$SRC" ]; then
+              cp "$SRC" "app/src/main/assets/snapclient_stable_$ABI"
+              chmod +x "app/src/main/assets/snapclient_stable_$ABI"
+              echo "✓ snapclient_stable_$ABI (stable)"
+            else
+              # Stable is optional — fall back to current if not yet promoted
+              cp "app/src/main/assets/snapclient_$ABI" "app/src/main/assets/snapclient_stable_$ABI"
+              echo "~ snapclient_stable_$ABI (copied from current — run promote_stable.sh to pin)"
+            fi
+          done
+
+          # Write small version text files read by the app at runtime
+          echo "$CURRENT_VER" > app/src/main/assets/snapclient_version_current.txt
+          echo "$STABLE_VER"  > app/src/main/assets/snapclient_version_stable.txt
+
+          echo ""
+          ls -lah app/src/main/assets/
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew

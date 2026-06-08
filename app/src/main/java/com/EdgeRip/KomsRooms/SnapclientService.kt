@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -16,14 +17,12 @@ import java.io.File
  * Foreground service that manages the snapclient binary subprocess.
  *
  * The snapclient binary is bundled in app/src/main/assets/ as:
- *   snapclient_arm64-v8a   (modern phones, Chromecast with Google TV)
- *   snapclient_armeabi-v7a (older 32-bit devices)
- *   snapclient_x86_64      (emulators)
+ *   snapclient_arm64-v8a        (current — updated by sync workflow)
+ *   snapclient_stable_arm64-v8a (pinned stable fallback)
+ *   snapclient_armeabi-v7a / snapclient_stable_armeabi-v7a  (same, 32-bit)
  *
- * On first start the binary is extracted to the app's private files dir,
- * made executable, and launched as a subprocess pointing at the Pi's
- * snapserver.  Android's audio output is via Oboe (AAudio) with OpenSL ES
- * as fallback — both are supported by snapclient 0.29+.
+ * The active binary is controlled by the "use_stable_binary" SharedPreference,
+ * toggled via the hidden dev menu in ConnectActivity (7-tap on the version label).
  */
 class SnapclientService : Service() {
 
@@ -35,10 +34,16 @@ class SnapclientService : Service() {
         private const val NOTIF_ID    = 1001
         private const val CHANNEL_ID  = "komsrooms_audio"
         private const val TAG         = "SnapclientService"
+        const val PREFS_NAME          = "komsrooms_dev"
+        const val PREF_USE_STABLE     = "use_stable_binary"
     }
 
     private var process: Process? = null
     private var currentIp: String = ""
+
+    private val prefs: SharedPreferences by lazy {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -53,7 +58,9 @@ class SnapclientService : Service() {
                 val ip   = intent.getStringExtra(EXTRA_SERVER_IP)   ?: return START_NOT_STICKY
                 val port = intent.getIntExtra(EXTRA_SERVER_PORT, 1704)
                 currentIp = ip
-                startForeground(NOTIF_ID, buildNotification("Connecting to $ip…"))
+                val useStable = prefs.getBoolean(PREF_USE_STABLE, false)
+                val label = if (useStable) "stable" else "current"
+                startForeground(NOTIF_ID, buildNotification("Connecting to $ip… [$label]"))
                 startSnapclient(ip, port)
             }
             ACTION_STOP -> {
@@ -74,6 +81,10 @@ class SnapclientService : Service() {
             updateNotification("Error: binary missing")
             return
         }
+
+        val useStable = prefs.getBoolean(PREF_USE_STABLE, false)
+        val label = if (useStable) "stable" else "current"
+        Log.i(TAG, "Using $label snapclient binary: ${binary.absolutePath}")
 
         // Try Oboe (AAudio) first; older builds fall back to OpenSL ES
         for (player in listOf("oboe", "opensl")) {
@@ -98,7 +109,7 @@ class SnapclientService : Service() {
                     }
                 }.apply { isDaemon = true }.start()
 
-                updateNotification("Playing · $ip")
+                updateNotification("Playing · $ip [$label]")
                 return  // success — don't try next player
             } catch (e: Exception) {
                 Log.w(TAG, "Failed with player=$player: ${e.message}")
@@ -118,28 +129,51 @@ class SnapclientService : Service() {
 
     /**
      * Extract the correct ABI binary from assets to the app's private files dir.
-     * Re-extracts on every start so an APK update always deploys the new binary.
+     *
+     * Asset name pattern:
+     *   snapclient_<abi>           ← current build (updated by sync)
+     *   snapclient_stable_<abi>    ← pinned stable fallback
+     *
+     * Re-extracts every start so APK updates always deploy the fresh binary.
      */
     private fun extractBinary(): File? {
         val abi = Build.SUPPORTED_ABIS
             .firstOrNull { it in listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
             ?: "arm64-v8a"
 
-        val assetName = "snapclient_$abi"
+        val useStable = prefs.getBoolean(PREF_USE_STABLE, false)
+        val assetName = if (useStable) "snapclient_stable_$abi" else "snapclient_$abi"
         val outFile   = File(filesDir, "snapclient")
 
+        // If the preferred asset doesn't exist, try to fall back gracefully
+        val resolvedAsset = when {
+            assetAvailable(assetName)              -> assetName
+            useStable && assetAvailable("snapclient_$abi") -> {
+                Log.w(TAG, "Stable binary not found, falling back to current")
+                "snapclient_$abi"
+            }
+            else -> null
+        } ?: run {
+            Log.e(TAG, "No snapclient binary found in assets for ABI=$abi (tried $assetName)")
+            return null
+        }
+
         return try {
-            assets.open(assetName).use { input ->
+            assets.open(resolvedAsset).use { input ->
                 outFile.outputStream().use { output -> input.copyTo(output) }
             }
             outFile.setExecutable(true, true)
-            Log.i(TAG, "Extracted $assetName → ${outFile.absolutePath}")
+            Log.i(TAG, "Extracted $resolvedAsset → ${outFile.absolutePath}")
             outFile
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract $assetName: ${e.message}")
+            Log.e(TAG, "Failed to extract $resolvedAsset: ${e.message}")
             null
         }
     }
+
+    private fun assetAvailable(name: String): Boolean = try {
+        assets.open(name).close(); true
+    } catch (e: Exception) { false }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

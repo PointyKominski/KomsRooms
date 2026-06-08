@@ -1,0 +1,122 @@
+name: Sync Snapdroid binaries
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Every Monday at 09:00 UTC
+  workflow_dispatch:        # Run manually any time from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for new Snapdroid release
+        id: check
+        run: |
+          # Read the version we currently have vendored
+          CURRENT=$(head -1 vendor/snapclient/VERSION | tr -d '[:space:]')
+          echo "Current vendored version: $CURRENT"
+
+          # Ask GitHub API for the latest release tag
+          LATEST=$(curl -s "https://api.github.com/repos/badaix/snapdroid/releases/latest" \
+            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+          echo "Latest upstream version: $LATEST"
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "up_to_date=true"  >> "$GITHUB_OUTPUT"
+            echo "✓ Already up to date."
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "⬆ New version available: $CURRENT → $LATEST"
+          fi
+
+      - name: Download and extract new binaries
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          set -e
+          LATEST="${{ steps.check.outputs.latest }}"
+
+          # Construct the APK download URL (Snapdroid follows a consistent naming scheme)
+          APK_URL="https://github.com/badaix/snapdroid/releases/download/${LATEST}/Snapcast-signed-${LATEST}.apk"
+          echo "Downloading: $APK_URL"
+          wget -q "$APK_URL" -O snapdroid_new.apk
+
+          echo "APK contents:"
+          unzip -l snapdroid_new.apk | grep -E '(snapclient|\.so)' || true
+
+          unzip -q snapdroid_new.apk -d snapdroid_extracted
+
+          mkdir -p vendor/snapclient
+
+          FOUND=0
+          for ABI in arm64-v8a armeabi-v7a; do
+            for NAME in snapclient snapclient_aarch64 snapclient_armv7 libsnapclient.so; do
+              SRC="snapdroid_extracted/lib/$ABI/$NAME"
+              if [ -f "$SRC" ]; then
+                cp "$SRC" "vendor/snapclient/snapclient_$ABI"
+                chmod +x "vendor/snapclient/snapclient_$ABI"
+                echo "✓ Extracted snapclient_$ABI from lib/$ABI/$NAME"
+                FOUND=$((FOUND+1))
+                break
+              fi
+            done
+            # Fallback: check assets/
+            for NAME in snapclient "snapclient_$ABI"; do
+              SRC="snapdroid_extracted/assets/$NAME"
+              if [ -f "$SRC" ] && [ ! -f "vendor/snapclient/snapclient_$ABI" ]; then
+                cp "$SRC" "vendor/snapclient/snapclient_$ABI"
+                chmod +x "vendor/snapclient/snapclient_$ABI"
+                echo "✓ Extracted snapclient_$ABI from assets/$NAME"
+                FOUND=$((FOUND+1))
+                break
+              fi
+            done
+          done
+
+          if [ "$FOUND" -eq 0 ]; then
+            echo "ERROR: Could not find any snapclient binary in the APK."
+            echo "Full APK contents:"
+            unzip -l snapdroid_new.apk
+            exit 1
+          fi
+
+          # Update VERSION file
+          APK_NAME="Snapcast-signed-${LATEST}.apk"
+          printf '%s\nhttps://github.com/badaix/snapdroid/releases/tag/%s\n%s\n' \
+            "$LATEST" "$LATEST" "$APK_NAME" > vendor/snapclient/VERSION
+
+          echo ""
+          echo "Updated vendor/snapclient:"
+          ls -lah vendor/snapclient/
+
+      - name: Open pull request with updated binaries
+        if: steps.check.outputs.up_to_date == 'false'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: update/snapclient-${{ steps.check.outputs.latest }}
+          commit-message: "vendor: update snapclient to ${{ steps.check.outputs.latest }}"
+          title: "Update snapclient ${{ steps.check.outputs.current }} → ${{ steps.check.outputs.latest }}"
+          body: |
+            Automated update from the weekly Snapdroid sync workflow.
+
+            | | |
+            |---|---|
+            | **Previous version** | `${{ steps.check.outputs.current }}` |
+            | **New version** | `${{ steps.check.outputs.latest }}` |
+            | **Source** | https://github.com/badaix/snapdroid/releases/tag/${{ steps.check.outputs.latest }} |
+
+            The vendored binaries in `vendor/snapclient/` have been updated.
+            Review and merge when ready — the build workflow uses these files directly.
+          labels: dependencies
+          add-paths: |
+            vendor/snapclient/
