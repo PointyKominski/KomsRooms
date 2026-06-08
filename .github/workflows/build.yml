@@ -77,11 +77,10 @@ jobs:
           echo ""
           ls -lah app/src/main/assets/
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
-
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -91,7 +90,9 @@ jobs:
           retention-days: 30
 
       - name: Build release APK (unsigned)
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
