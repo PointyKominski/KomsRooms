@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/bg_dark"/>
-    <foreground android:drawable="@drawable/ic_music_note"/>
-</adaptive-icon>
+<!-- Fallback round launcher icon for Android < 8.0 (API 26). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/bg_dark"/>
+    <item
+        android:top="20dp" android:bottom="20dp"
+        android:left="20dp" android:right="20dp"
+        android:drawable="@drawable/ic_music_note"/>
+</layer-list>
