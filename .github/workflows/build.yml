@@ -72,20 +72,19 @@ jobs:
           echo ""
           ls -lah app/src/main/assets/
 
-      - name: Build debug APK
-        run: bash gradlew assembleDebug --stacktrace
+      - name: Build APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
-      - name: Upload APK artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: KomsRooms-debug-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Build release APK (unsigned)
-        run: bash gradlew assembleRelease --stacktrace
-
-      - name: Upload release APK artifact
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: KomsRooms-release-unsigned-${{ github.run_number }}
