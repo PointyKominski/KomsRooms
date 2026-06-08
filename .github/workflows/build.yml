@@ -73,9 +73,7 @@ jobs:
           ls -lah app/src/main/assets/
 
       - name: Build debug APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+        run: bash gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -85,9 +83,7 @@ jobs:
           retention-days: 30
 
       - name: Build release APK (unsigned)
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+        run: bash gradlew assembleRelease --stacktrace
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
