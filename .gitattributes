@@ -1,0 +1,20 @@
+# Binary files — never touch line endings
+*.jar    binary
+*.apk    binary
+*.so     binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.keystore binary
+
+# Snapclient binaries (no extension)
+vendor/snapclient/snapclient_* binary
+vendor/snapclient_stable/snapclient_* binary
+app/src/main/assets/snapclient_* binary
+
+# Shell scripts — LF only (so they work on Linux/CI)
+*.sh     text eol=lf
+
+# Everything else — auto
+*        text=auto
