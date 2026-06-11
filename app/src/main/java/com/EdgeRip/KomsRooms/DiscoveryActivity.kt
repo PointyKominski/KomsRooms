@@ -16,12 +16,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.EdgeRip.KomsRooms.databinding.ActivityDiscoveryBinding
 
 /**
- * Main entry screen — discovers KomsRooms/Snapcast servers on the local network
+ * Main entry screen — discovers KomsRooms servers on the local network
  * via mDNS (_snapcast._tcp) and lists them for one-tap connection.
  *
- * "Manual" button opens ManualConnectFragment (bottom sheet) with IP/port fields.
- *
- * Hidden dev menu: tap the version label 7 times.
+ * "Manual" button opens ManualConnectActivity.
+ * Version label: 7-tap for developer options.
  */
 class DiscoveryActivity : AppCompatActivity() {
 
@@ -34,14 +33,10 @@ class DiscoveryActivity : AppCompatActivity() {
     private val discoveredServers = mutableListOf<SnapcastServer>()
     private lateinit var adapter: ServerListAdapter
 
-    // 7-tap dev menu state
     private var tapCount = 0
     private var lastTapTime = 0L
-    private val TAP_WINDOW_MS = 3000L
-    private val TAPS_REQUIRED = 7
 
     data class SnapcastServer(
-        val name: String,
         val host: String,
         val snapPort: Int = 1704,
         val webPort: Int = 5900
@@ -55,16 +50,14 @@ class DiscoveryActivity : AppCompatActivity() {
         vm = ViewModelProvider(this)[MainViewModel::class.java]
         devPrefs = getSharedPreferences(SnapclientService.PREFS_NAME, MODE_PRIVATE)
 
-        // If we already have a saved server, show a "reconnect" button at the top
+        // Last connected server shortcut
         if (vm.isConfigured) {
             binding.lastServerCard.visibility = View.VISIBLE
-            binding.tvLastServer.text = "${vm.savedIp}  ·  port ${vm.savedSnapPort}"
-            binding.btnReconnect.setOnClickListener {
-                launchPlayer()
-            }
+            binding.tvLastServer.text = vm.savedIp
+            binding.btnReconnect.setOnClickListener { launchPlayer() }
         }
 
-        // RecyclerView for discovered servers
+        // Server list
         adapter = ServerListAdapter(discoveredServers) { server ->
             vm.connect(server.host, server.webPort, server.snapPort)
             launchPlayer()
@@ -72,18 +65,11 @@ class DiscoveryActivity : AppCompatActivity() {
         binding.rvServers.layoutManager = LinearLayoutManager(this)
         binding.rvServers.adapter = adapter
 
-        // Manual entry button
         binding.btnManual.setOnClickListener {
-            ManualConnectFragment.show(supportFragmentManager) { ip, webPort, snapPort ->
-                vm.connect(ip, webPort, snapPort)
-                launchPlayer()
-            }
+            startActivity(Intent(this, ManualConnectActivity::class.java))
         }
 
-        // Refresh / scan button
-        binding.btnRefresh.setOnClickListener {
-            startDiscovery()
-        }
+        binding.btnRefresh.setOnClickListener { startDiscovery() }
 
         setupDevMenu()
         startDiscovery()
@@ -102,7 +88,7 @@ class DiscoveryActivity : AppCompatActivity() {
             val listener = object : NsdManager.DiscoveryListener {
                 override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                     runOnUiThread {
-                        binding.tvScanStatus.text = "Scan failed (error $errorCode)"
+                        binding.tvScanStatus.text = "Scan failed — try Manual"
                         binding.progressScan.visibility = View.GONE
                     }
                 }
@@ -114,18 +100,17 @@ class DiscoveryActivity : AppCompatActivity() {
                     mgr.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(si: NsdServiceInfo, errorCode: Int) {}
                         override fun onServiceResolved(si: NsdServiceInfo) {
-                            val host = si.host?.hostAddress ?: return
+                            // Only use IPv4 addresses — skip link-local / IPv6
+                            val addr = si.host ?: return
+                            val host = addr.hostAddress ?: return
+                            if (host.contains(':') || host.startsWith("169.254")) return
+
                             val snapPort = si.port.takeIf { it > 0 } ?: 1704
-                            // Derive web UI port: Snapcast HTTP is typically snapPort + 76 (1780),
-                            // but our web UI is on 5900. Check TXT record first, fallback to 5900.
-                            val webPort = si.attributes["webport"]
+                            val webPort  = si.attributes["webport"]
                                 ?.let { String(it).toIntOrNull() } ?: 5900
-                            val server = SnapcastServer(
-                                name = si.serviceName,
-                                host = host,
-                                snapPort = snapPort,
-                                webPort = webPort
-                            )
+
+                            val server = SnapcastServer(host, snapPort, webPort)
+
                             runOnUiThread {
                                 if (discoveredServers.none { it.host == host }) {
                                     discoveredServers.add(server)
@@ -140,25 +125,13 @@ class DiscoveryActivity : AppCompatActivity() {
                 }
 
                 override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                    runOnUiThread {
-                        val removed = discoveredServers.indexOfFirst {
-                            it.name == serviceInfo.serviceName
-                        }
-                        if (removed >= 0) {
-                            discoveredServers.removeAt(removed)
-                            adapter.notifyItemRemoved(removed)
-                            binding.tvScanStatus.text =
-                                if (discoveredServers.isEmpty()) "No servers found"
-                                else "${discoveredServers.size} server(s) found"
-                        }
-                    }
+                    // We don't store the name anymore so just re-scan on loss
                 }
             }
             discoveryListener = listener
             mgr.discoverServices("_snapcast._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
         }
 
-        // Show "no servers found" after 8 seconds if still empty
         binding.root.postDelayed({
             if (discoveredServers.isEmpty()) {
                 binding.tvScanStatus.text = "No servers found — try Manual"
@@ -168,15 +141,13 @@ class DiscoveryActivity : AppCompatActivity() {
     }
 
     private fun stopDiscovery() {
-        try {
-            discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
-        } catch (e: Exception) { /* ignore if already stopped */ }
+        try { discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) } }
+        catch (e: Exception) {}
         discoveryListener = null
     }
 
     override fun onResume() {
         super.onResume()
-        // Re-scan when coming back to this screen
         if (discoveredServers.isEmpty()) startDiscovery()
     }
 
@@ -185,30 +156,22 @@ class DiscoveryActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    // ── Dev menu (7-tap on version label) ────────────────────────────────────
+    // ── Dev menu ─────────────────────────────────────────────────────────────
 
     private fun setupDevMenu() {
         val useStable = devPrefs.getBoolean(SnapclientService.PREF_USE_STABLE, false)
-        val stableVersion = readAssetLine("snapclient_version_stable.txt") ?: "not bundled"
         val currentVersion = readAssetLine("snapclient_version_current.txt") ?: "unknown"
         binding.tvVersion.text = "v$currentVersion${if (useStable) " · stable" else ""}"
 
         binding.tvVersion.setOnClickListener {
             val now = System.currentTimeMillis()
-            if (now - lastTapTime > TAP_WINDOW_MS) tapCount = 0
+            if (now - lastTapTime > 3000L) tapCount = 0
             lastTapTime = now
             tapCount++
-            val remaining = TAPS_REQUIRED - tapCount
-            if (remaining in 1..3) Toast.makeText(this, "$remaining more…", Toast.LENGTH_SHORT).show()
-            if (tapCount >= TAPS_REQUIRED) {
+            if (tapCount in 4..6) Toast.makeText(this, "${7 - tapCount} more…", Toast.LENGTH_SHORT).show()
+            if (tapCount >= 7) {
                 tapCount = 0
-                ManualConnectFragment.showDevPanel(
-                    supportFragmentManager, currentVersion, stableVersion, devPrefs
-                ) {
-                    // Refresh version label after toggle
-                    val nowStable = devPrefs.getBoolean(SnapclientService.PREF_USE_STABLE, false)
-                    binding.tvVersion.text = "v$currentVersion${if (nowStable) " · stable" else ""}"
-                }
+                startActivity(Intent(this, ManualConnectActivity::class.java))
             }
         }
     }

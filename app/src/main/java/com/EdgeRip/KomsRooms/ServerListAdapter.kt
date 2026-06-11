@@ -20,8 +20,10 @@ class ServerListAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val server = servers[position]
-        holder.binding.tvServerName.text = server.name
-        holder.binding.tvServerHost.text = "${server.host}  ·  port ${server.snapPort}"
+        // Always show "KomsRooms" as the friendly name — the underlying
+        // mDNS service is Snapcast but this is our wrapper.
+        holder.binding.tvServerName.text = "KomsRooms"
+        holder.binding.tvServerHost.text = server.host
         holder.binding.root.setOnClickListener { onConnect(server) }
     }
 }

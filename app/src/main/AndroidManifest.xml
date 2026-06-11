@@ -31,9 +31,15 @@
             </intent-filter>
         </activity>
 
-        <!-- Manual connect / settings (also entry point if called directly) -->
+        <!-- Manual connect entry screen -->
         <activity
             android:name=".ConnectActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Manual connect full-screen activity -->
+        <activity
+            android:name=".ManualConnectActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
