@@ -39,6 +39,15 @@ class TvActivity : FragmentActivity() {
             vm.reconnectSaved()
         }
 
+        // Show which server we're connected to
+        val ip = vm.savedIp.ifEmpty { "unknown" }
+        binding.tvStatus.text = "Connected to $ip"
+
+        // "Change server" goes back to discovery
+        binding.tvChangeServer.setOnClickListener {
+            finish() // returns to DiscoveryActivity
+        }
+
         observePlayerState()
         wireControls()
 
@@ -49,6 +58,18 @@ class TvActivity : FragmentActivity() {
     private fun observePlayerState() {
         lifecycleScope.launch {
             vm.player.collectLatest { state ->
+                // Status dot: green if API responding, red if error
+                val dotRes = if (state.connected)
+                    android.R.drawable.presence_online
+                else
+                    android.R.drawable.presence_busy
+                binding.statusDot.setBackgroundResource(dotRes)
+                if (!state.connected && state.error != null) {
+                    binding.tvStatus.text = "No response from ${vm.savedIp}"
+                } else {
+                    binding.tvStatus.text = "Connected to ${vm.savedIp}"
+                }
+
                 binding.tvTitle.text  = state.title.ifEmpty  { "Spotify" }
                 binding.tvArtist.text = state.artist.ifEmpty { "Connect" }
                 binding.tvAlbum.text  = state.album

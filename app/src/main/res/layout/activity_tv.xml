@@ -36,6 +36,54 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintWidth_percent="0.45" />
 
+    <!-- Connection status strip — bottom of screen -->
+    <LinearLayout
+        android:id="@+id/statusStrip"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="#33000000"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Coloured dot: green = connected, red = disconnected -->
+        <View
+            android:id="@+id/statusDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:background="@android:drawable/presence_online"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Connecting…"
+            android:textColor="@color/text_hint"
+            android:textSize="13sp" />
+
+        <!-- Tap to go back to server list -->
+        <TextView
+            android:id="@+id/tvChangeServer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Change server"
+            android:textColor="@color/accent"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="16dp"
+            android:paddingEnd="4dp" />
+
+    </LinearLayout>
+
     <!-- Right panel — vertically centred -->
     <LinearLayout
         android:id="@+id/rightPanel"
