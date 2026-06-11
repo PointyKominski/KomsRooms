@@ -37,6 +37,7 @@ class DiscoveryActivity : AppCompatActivity() {
     private var lastTapTime = 0L
 
     data class SnapcastServer(
+        val name: String,
         val host: String,
         val snapPort: Int = 1704,
         val webPort: Int = 5900
@@ -109,7 +110,7 @@ class DiscoveryActivity : AppCompatActivity() {
                             val webPort  = si.attributes["webport"]
                                 ?.let { String(it).toIntOrNull() } ?: 5900
 
-                            val server = SnapcastServer(host, snapPort, webPort)
+                            val server = SnapcastServer(si.serviceName, host, snapPort, webPort)
 
                             runOnUiThread {
                                 if (discoveredServers.none { it.host == host }) {
