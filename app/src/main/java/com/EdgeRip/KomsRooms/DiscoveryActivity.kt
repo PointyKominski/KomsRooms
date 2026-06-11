@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.app.UiModeManager
-import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -113,17 +112,44 @@ class DiscoveryActivity : AppCompatActivity() {
      * Get the device's current Wi-Fi subnet prefix, e.g. "192.168.1".
      * Returns null if not connected to Wi-Fi.
      */
+    /**
+     * Returns the /24 subnet prefix of this device's current IP, e.g. "192.168.1".
+     *
+     * Strategy (most-reliable first):
+     *  1. Enumerate all network interfaces and pick the first IPv4 that isn't
+     *     loopback or link-local — works on Android TV / Chromecast and all
+     *     Android versions without deprecated APIs.
+     *  2. Fall back to WifiManager.connectionInfo (deprecated in API 31 but
+     *     still works on most devices).
+     */
     private fun localSubnet(): String? {
+        // Method 1: network interfaces (works everywhere, including Android TV)
+        try {
+            val ifaces = java.net.NetworkInterface.getNetworkInterfaces()
+            if (ifaces != null) {
+                for (iface in ifaces.asSequence()) {
+                    if (!iface.isUp || iface.isLoopback) continue
+                    for (addr in iface.inetAddresses.asSequence()) {
+                        if (addr is java.net.Inet4Address && !addr.isLoopbackAddress && !addr.isLinkLocalAddress) {
+                            val parts = addr.hostAddress?.split(".") ?: continue
+                            if (parts.size == 4) return "${parts[0]}.${parts[1]}.${parts[2]}"
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // Method 2: WifiManager fallback (deprecated API 31+ but still functional)
         return try {
-            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
+            @Suppress("DEPRECATION")
             val ip = wm.connectionInfo?.ipAddress ?: return null
             if (ip == 0) return null
-            // Android gives IP as little-endian int
             val a = ip and 0xFF
             val b = (ip shr 8) and 0xFF
             val c = (ip shr 16) and 0xFF
             "$a.$b.$c"
-        } catch (e: Exception) { null }
+        } catch (_: Exception) { null }
     }
 
     override fun onResume() {
