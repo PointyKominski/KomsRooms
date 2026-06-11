@@ -22,55 +22,51 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # ── Copy vendored snapclient binaries into assets ─────────────────────
-      # Two sets of binaries are bundled:
-      #   snapclient_<abi>        — current (updated by sync_snapdroid workflow)
-      #   snapclient_stable_<abi> — pinned fallback (promoted manually via promote_stable.sh)
-      # The in-app developer panel (7-tap on version label) switches between them.
-      - name: Copy vendored snapclient binaries to assets
+      # ── Copy vendored snapclient binaries into jniLibs ───────────────────
+      # Binaries are shipped as .so files in jniLibs so Android installs them
+      # to the app's nativeLibraryDir, which is always executable.
+      # Putting them in assets and extracting to /data/user/ fails on modern
+      # Android because that partition is mounted noexec.
+      #
+      # Two variants:
+      #   libsnapclient.so        — current (updated by sync_snapdroid workflow)
+      #   libsnapclient_stable.so — pinned fallback (promoted via promote_stable.sh)
+      - name: Copy vendored snapclient binaries to jniLibs
         run: |
           set -e
-          mkdir -p app/src/main/assets
 
           CURRENT_VER=$(head -1 vendor/snapclient/VERSION | tr -d '[:space:]')
           STABLE_VER=$(head -1 vendor/snapclient_stable/VERSION 2>/dev/null | tr -d '[:space:]' || echo "none")
+          echo "Current version: $CURRENT_VER  |  Stable version: $STABLE_VER"
 
-          echo "Current version: $CURRENT_VER"
-          echo "Stable version:  $STABLE_VER"
-
-          # Current binaries
           for ABI in arm64-v8a armeabi-v7a; do
+            mkdir -p "app/src/main/jniLibs/$ABI"
+
             SRC="vendor/snapclient/snapclient_$ABI"
-            if [ -f "$SRC" ]; then
-              cp "$SRC" "app/src/main/assets/snapclient_$ABI"
-              chmod +x "app/src/main/assets/snapclient_$ABI"
-              echo "✓ snapclient_$ABI (current)"
-            else
+            if [ ! -f "$SRC" ]; then
               echo "⚠ $SRC not found — run scripts/fetch_snapclient.sh and commit"
               exit 1
             fi
-          done
+            cp "$SRC" "app/src/main/jniLibs/$ABI/libsnapclient.so"
+            echo "✓ libsnapclient.so [$ABI] (current)"
 
-          # Stable/fallback binaries
-          for ABI in arm64-v8a armeabi-v7a; do
-            SRC="vendor/snapclient_stable/snapclient_$ABI"
-            if [ -f "$SRC" ]; then
-              cp "$SRC" "app/src/main/assets/snapclient_stable_$ABI"
-              chmod +x "app/src/main/assets/snapclient_stable_$ABI"
-              echo "✓ snapclient_stable_$ABI (stable)"
+            STABLE_SRC="vendor/snapclient_stable/snapclient_$ABI"
+            if [ -f "$STABLE_SRC" ]; then
+              cp "$STABLE_SRC" "app/src/main/jniLibs/$ABI/libsnapclient_stable.so"
+              echo "✓ libsnapclient_stable.so [$ABI] (stable)"
             else
-              # Stable is optional — fall back to current if not yet promoted
-              cp "app/src/main/assets/snapclient_$ABI" "app/src/main/assets/snapclient_stable_$ABI"
-              echo "~ snapclient_stable_$ABI (copied from current — run promote_stable.sh to pin)"
+              cp "$SRC" "app/src/main/jniLibs/$ABI/libsnapclient_stable.so"
+              echo "~ libsnapclient_stable.so [$ABI] (copied from current)"
             fi
           done
 
-          # Write small version text files read by the app at runtime
+          # Version text files still go to assets so the app can read them at runtime
+          mkdir -p app/src/main/assets
           echo "$CURRENT_VER" > app/src/main/assets/snapclient_version_current.txt
           echo "$STABLE_VER"  > app/src/main/assets/snapclient_version_stable.txt
 
           echo ""
-          ls -lah app/src/main/assets/
+          ls -lah app/src/main/jniLibs/arm64-v8a/ app/src/main/jniLibs/armeabi-v7a/
 
       - name: Build APKs
         run: |

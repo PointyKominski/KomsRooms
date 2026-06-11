@@ -75,9 +75,9 @@ class SnapclientService : Service() {
     private fun startSnapclient(ip: String, port: Int) {
         stopSnapclient()
 
-        val binary = extractBinary()
+        val binary = nativeBinary()
         if (binary == null) {
-            Log.e(TAG, "snapclient binary not found in assets — did the build workflow run?")
+            Log.e(TAG, "snapclient binary not found in nativeLibraryDir — did the build workflow run?")
             updateNotification("Error: binary missing")
             return
         }
@@ -128,52 +128,39 @@ class SnapclientService : Service() {
     }
 
     /**
-     * Extract the correct ABI binary from assets to the app's private files dir.
+     * Locate the snapclient binary in the app's nativeLibraryDir.
      *
-     * Asset name pattern:
-     *   snapclient_<abi>           ← current build (updated by sync)
-     *   snapclient_stable_<abi>    ← pinned stable fallback
+     * Binaries are shipped as .so files in jniLibs so Android installs them
+     * to nativeLibraryDir, which is always mounted executable (unlike
+     * /data/user/ which is noexec on modern Android).
      *
-     * Re-extracts every start so APK updates always deploy the fresh binary.
+     * File names:
+     *   libsnapclient.so         ← current
+     *   libsnapclient_stable.so  ← pinned stable fallback
      */
-    private fun extractBinary(): File? {
-        val abi = Build.SUPPORTED_ABIS
-            .firstOrNull { it in listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-            ?: "arm64-v8a"
-
+    private fun nativeBinary(): File? {
+        val libDir = applicationInfo.nativeLibraryDir
         val useStable = prefs.getBoolean(PREF_USE_STABLE, false)
-        val assetName = if (useStable) "snapclient_stable_$abi" else "snapclient_$abi"
-        val outFile   = File(filesDir, "snapclient")
 
-        // If the preferred asset doesn't exist, try to fall back gracefully
-        val resolvedAsset = when {
-            assetAvailable(assetName)              -> assetName
-            useStable && assetAvailable("snapclient_$abi") -> {
+        val preferred = File(libDir, if (useStable) "libsnapclient_stable.so" else "libsnapclient.so")
+        val fallback  = File(libDir, "libsnapclient.so")
+
+        return when {
+            preferred.exists() && preferred.canExecute() -> {
+                Log.i(TAG, "Found binary: ${preferred.absolutePath}")
+                preferred
+            }
+            useStable && fallback.exists() && fallback.canExecute() -> {
                 Log.w(TAG, "Stable binary not found, falling back to current")
-                "snapclient_$abi"
+                fallback
             }
-            else -> null
-        } ?: run {
-            Log.e(TAG, "No snapclient binary found in assets for ABI=$abi (tried $assetName)")
-            return null
-        }
-
-        return try {
-            assets.open(resolvedAsset).use { input ->
-                outFile.outputStream().use { output -> input.copyTo(output) }
+            else -> {
+                Log.e(TAG, "No executable snapclient binary in $libDir")
+                Log.e(TAG, "Contents: ${File(libDir).listFiles()?.joinToString { it.name } ?: "empty"}")
+                null
             }
-            outFile.setExecutable(true, true)
-            Log.i(TAG, "Extracted $resolvedAsset → ${outFile.absolutePath}")
-            outFile
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract $resolvedAsset: ${e.message}")
-            null
         }
     }
-
-    private fun assetAvailable(name: String): Boolean = try {
-        assets.open(name).close(); true
-    } catch (e: Exception) { false }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
