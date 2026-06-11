@@ -98,18 +98,22 @@ object PiApiClient {
     suspend fun scanForServers(
         subnet: String,          // e.g. "192.168.1"
         rpcPort: Int = 1705,
-        timeoutMs: Int = 300     // short timeout per host — we try 254 IPs in parallel
+        timeoutMs: Int = 500
     ): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val found = mutableListOf<Pair<String, String>>()
+        // Scan in batches of 32 to avoid overwhelming the device's network stack
+        // with 254 simultaneous TCP connections
         kotlinx.coroutines.coroutineScope {
-            val jobs = (1..254).map { octet ->
-                async {
-                    val ip = "$subnet.$octet"
-                    val name = snapcastServerName(ip, rpcPort, timeoutMs)
-                    if (name != null) synchronized(found) { found.add(ip to name) }
+            (1..254).chunked(32).forEach { batch ->
+                val jobs = batch.map { octet ->
+                    async {
+                        val ip = "$subnet.$octet"
+                        val name = snapcastServerName(ip, rpcPort, timeoutMs)
+                        if (name != null) synchronized(found) { found.add(ip to name) }
+                    }
                 }
+                jobs.forEach { it.await() }
             }
-            jobs.forEach { it.await() }
         }
         found.sortedBy { it.first }
     }
