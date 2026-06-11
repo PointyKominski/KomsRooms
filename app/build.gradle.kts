@@ -63,6 +63,9 @@ dependencies {
     // TV (Leanback for Chromecast / Android TV)
     implementation("androidx.leanback:leanback:1.0.0")
 
+    // RecyclerView for server list
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+
     // Album art loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
 
