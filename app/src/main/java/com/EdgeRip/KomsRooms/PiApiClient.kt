@@ -1,6 +1,8 @@
 package com.EdgeRip.KomsRooms
 
 import com.EdgeRip.KomsRooms.model.PlayerState
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -99,14 +101,16 @@ object PiApiClient {
         timeoutMs: Int = 300     // short timeout per host — we try 254 IPs in parallel
     ): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val found = mutableListOf<Pair<String, String>>()
-        val jobs  = (1..254).map { octet ->
-            kotlinx.coroutines.async {
-                val ip = "$subnet.$octet"
-                val name = snapcastServerName(ip, rpcPort, timeoutMs)
-                if (name != null) synchronized(found) { found.add(ip to name) }
+        kotlinx.coroutines.coroutineScope {
+            val jobs = (1..254).map { octet ->
+                async {
+                    val ip = "$subnet.$octet"
+                    val name = snapcastServerName(ip, rpcPort, timeoutMs)
+                    if (name != null) synchronized(found) { found.add(ip to name) }
+                }
             }
+            jobs.forEach { it.await() }
         }
-        jobs.forEach { it.await() }
         found.sortedBy { it.first }
     }
 
