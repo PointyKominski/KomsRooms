@@ -11,8 +11,11 @@ android {
         applicationId = "com.EdgeRip.KomsRooms"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // Build number auto-increments from GitHub Actions run number.
+        // Local builds show versionCode=0, versionName="1.0.0-local"
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = runNumber
+        versionName = if (runNumber > 0) "1.0.$runNumber" else "1.0.0-local"
     }
 
     buildTypes {
@@ -42,9 +45,11 @@ android {
         jvmTarget = "17"
     }
 
-    // Bundle arm64 and armeabi-v7a snapclient binaries from assets
     packaging {
-        jniLibs.useLegacyPackaging = false
+        // MUST be true: snapclient is run as a subprocess, so it needs to be
+        // a real file on disk. false (the default) keeps .so compressed inside
+        // the APK and never extracts it, which means ProcessBuilder can't run it.
+        jniLibs.useLegacyPackaging = true
     }
 }
 

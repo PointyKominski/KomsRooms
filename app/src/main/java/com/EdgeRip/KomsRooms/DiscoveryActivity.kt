@@ -164,8 +164,9 @@ class DiscoveryActivity : AppCompatActivity() {
 
     private fun setupDevMenu() {
         val useStable = devPrefs.getBoolean(SnapclientService.PREF_USE_STABLE, false)
-        val currentVersion = readAssetLine("snapclient_version_current.txt") ?: "unknown"
-        binding.tvVersion.text = "v$currentVersion${if (useStable) " · stable" else ""}"
+        val snapVersion = readAssetLine("snapclient_version_current.txt") ?: "unknown"
+        val appVersion = BuildConfig.VERSION_NAME
+        binding.tvVersion.text = "KomsRoom $appVersion · snapclient $snapVersion${if (useStable) " (stable)" else ""}"
 
         binding.tvVersion.setOnClickListener {
             val now = System.currentTimeMillis()

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Adaptive icon for API 26+ (includes Chromecast with Google TV).
+    Background: solid dark colour matching the app theme.
+    Foreground: the custom PNG launcher image.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/bg_dark"/>
+    <foreground>
+        <bitmap
+            android:src="@drawable/ic_launcher_source"
+            android:gravity="fill"/>
+    </foreground>
+</adaptive-icon>
