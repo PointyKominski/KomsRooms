@@ -85,10 +85,13 @@ class DiscoveryActivity : AppCompatActivity() {
 
         val subnet = localSubnet()
         if (subnet == null) {
-            binding.tvScanStatus.text = "Not on Wi-Fi — use Manual"
+            binding.tvScanStatus.text = "No network — use Manual"
             binding.progressScan.visibility = View.GONE
             return
         }
+
+        // Show the subnet being scanned so the user can verify it's the right network
+        binding.tvScanStatus.text = "Scanning $subnet.0/24…"
 
         lifecycleScope.launch {
             val results = PiApiClient.scanForServers(subnet, rpcPort = 1705, timeoutMs = 300)
@@ -101,9 +104,9 @@ class DiscoveryActivity : AppCompatActivity() {
 
             binding.progressScan.visibility = View.GONE
             binding.tvScanStatus.text = when {
-                discoveredServers.isEmpty() -> "No servers found — try Manual"
-                discoveredServers.size == 1 -> "1 server found"
-                else -> "${discoveredServers.size} servers found"
+                discoveredServers.isEmpty() -> "No servers found on $subnet.0/24 — try Manual"
+                discoveredServers.size == 1 -> "1 server found on $subnet.0/24"
+                else -> "${discoveredServers.size} servers found on $subnet.0/24"
             }
         }
     }
