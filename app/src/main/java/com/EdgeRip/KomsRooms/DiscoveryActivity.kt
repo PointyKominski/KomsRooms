@@ -1,26 +1,29 @@
 package com.EdgeRip.KomsRooms
 
-import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.app.UiModeManager
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.EdgeRip.KomsRooms.databinding.ActivityDiscoveryBinding
+import kotlinx.coroutines.launch
 
 /**
- * Main entry screen — discovers KomsRooms servers on the local network
- * via mDNS (_snapcast._tcp) and lists them for one-tap connection.
+ * Main entry screen.
  *
- * "Manual" button opens ManualConnectActivity.
- * Version label: 7-tap for developer options.
+ * Discovers KomsRooms servers by scanning the local subnet for hosts
+ * responding to the Snapcast JSON-RPC on port 1705.  No mDNS / name
+ * resolution used — pure direct IP TCP connections.
+ *
+ * The server name shown in the list comes from Server.GetStatus, which
+ * returns whatever name was set in snapserver.conf on the Pi.
  */
 class DiscoveryActivity : AppCompatActivity() {
 
@@ -28,8 +31,6 @@ class DiscoveryActivity : AppCompatActivity() {
     private lateinit var vm: MainViewModel
     private lateinit var devPrefs: SharedPreferences
 
-    private var nsdManager: NsdManager? = null
-    private var discoveryListener: NsdManager.DiscoveryListener? = null
     private val discoveredServers = mutableListOf<SnapcastServer>()
     private lateinit var adapter: ServerListAdapter
 
@@ -58,7 +59,6 @@ class DiscoveryActivity : AppCompatActivity() {
             binding.btnReconnect.setOnClickListener { launchPlayer() }
         }
 
-        // Server list
         adapter = ServerListAdapter(discoveredServers) { server ->
             vm.connect(server.host, server.webPort, server.snapPort)
             launchPlayer()
@@ -70,91 +70,65 @@ class DiscoveryActivity : AppCompatActivity() {
             startActivity(Intent(this, ManualConnectActivity::class.java))
         }
 
-        binding.btnRefresh.setOnClickListener { startDiscovery() }
+        binding.btnRefresh.setOnClickListener { startScan() }
 
         setupDevMenu()
-        startDiscovery()
+        startScan()
     }
 
-    // ── mDNS discovery ───────────────────────────────────────────────────────
+    // ── Subnet scan ──────────────────────────────────────────────────────────
 
-    private fun startDiscovery() {
-        stopDiscovery()
+    private fun startScan() {
         discoveredServers.clear()
         adapter.notifyDataSetChanged()
         binding.tvScanStatus.text = "Scanning…"
         binding.progressScan.visibility = View.VISIBLE
 
-        nsdManager = (getSystemService(Context.NSD_SERVICE) as NsdManager).also { mgr ->
-            val listener = object : NsdManager.DiscoveryListener {
-                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                    runOnUiThread {
-                        binding.tvScanStatus.text = "Scan failed — try Manual"
-                        binding.progressScan.visibility = View.GONE
-                    }
-                }
-                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
-                override fun onDiscoveryStarted(serviceType: String) {}
-                override fun onDiscoveryStopped(serviceType: String) {}
-
-                override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                    mgr.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                        override fun onResolveFailed(si: NsdServiceInfo, errorCode: Int) {}
-                        override fun onServiceResolved(si: NsdServiceInfo) {
-                            // Only use IPv4 addresses — skip link-local / IPv6
-                            val addr = si.host ?: return
-                            val host = addr.hostAddress ?: return
-                            if (host.contains(':') || host.startsWith("169.254")) return
-
-                            val snapPort = si.port.takeIf { it > 0 } ?: 1704
-                            val webPort  = si.attributes["webport"]
-                                ?.let { String(it).toIntOrNull() } ?: 5900
-
-                            val server = SnapcastServer(si.serviceName, host, snapPort, webPort)
-
-                            runOnUiThread {
-                                if (discoveredServers.none { it.host == host }) {
-                                    discoveredServers.add(server)
-                                    adapter.notifyItemInserted(discoveredServers.size - 1)
-                                    binding.tvScanStatus.text =
-                                        "${discoveredServers.size} server(s) found"
-                                    binding.progressScan.visibility = View.GONE
-                                }
-                            }
-                        }
-                    })
-                }
-
-                override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                    // We don't store the name anymore so just re-scan on loss
-                }
-            }
-            discoveryListener = listener
-            mgr.discoverServices("_snapcast._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
+        val subnet = localSubnet()
+        if (subnet == null) {
+            binding.tvScanStatus.text = "Not on Wi-Fi — use Manual"
+            binding.progressScan.visibility = View.GONE
+            return
         }
 
-        binding.root.postDelayed({
-            if (discoveredServers.isEmpty()) {
-                binding.tvScanStatus.text = "No servers found — try Manual"
-                binding.progressScan.visibility = View.GONE
+        lifecycleScope.launch {
+            val results = PiApiClient.scanForServers(subnet, rpcPort = 1705, timeoutMs = 300)
+
+            discoveredServers.clear()
+            results.forEach { (ip, name) ->
+                discoveredServers.add(SnapcastServer(name = name, host = ip))
             }
-        }, 8000)
+            adapter.notifyDataSetChanged()
+
+            binding.progressScan.visibility = View.GONE
+            binding.tvScanStatus.text = when {
+                discoveredServers.isEmpty() -> "No servers found — try Manual"
+                discoveredServers.size == 1 -> "1 server found"
+                else -> "${discoveredServers.size} servers found"
+            }
+        }
     }
 
-    private fun stopDiscovery() {
-        try { discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) } }
-        catch (e: Exception) {}
-        discoveryListener = null
+    /**
+     * Get the device's current Wi-Fi subnet prefix, e.g. "192.168.1".
+     * Returns null if not connected to Wi-Fi.
+     */
+    private fun localSubnet(): String? {
+        return try {
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            val ip = wm.connectionInfo?.ipAddress ?: return null
+            if (ip == 0) return null
+            // Android gives IP as little-endian int
+            val a = ip and 0xFF
+            val b = (ip shr 8) and 0xFF
+            val c = (ip shr 16) and 0xFF
+            "$a.$b.$c"
+        } catch (e: Exception) { null }
     }
 
     override fun onResume() {
         super.onResume()
-        if (discoveredServers.isEmpty()) startDiscovery()
-    }
-
-    override fun onDestroy() {
-        stopDiscovery()
-        super.onDestroy()
+        if (discoveredServers.isEmpty()) startScan()
     }
 
     // ── Dev menu ─────────────────────────────────────────────────────────────

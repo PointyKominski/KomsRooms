@@ -85,6 +85,62 @@ object PiApiClient {
             post("$webBase/api/set_eq", payload.toString()) != null
         }
 
+    // ── Snapcast server discovery via direct TCP (no mDNS) ───────────────────
+
+    /**
+     * Scans the given subnet (e.g. "192.168.1") for hosts responding to
+     * the Snapcast JSON-RPC on port 1705. For each host found, fetches
+     * the server name via Server.GetStatus.
+     * Returns a list of (ip, serverName) pairs.
+     */
+    suspend fun scanForServers(
+        subnet: String,          // e.g. "192.168.1"
+        rpcPort: Int = 1705,
+        timeoutMs: Int = 300     // short timeout per host — we try 254 IPs in parallel
+    ): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val found = mutableListOf<Pair<String, String>>()
+        val jobs  = (1..254).map { octet ->
+            kotlinx.coroutines.async {
+                val ip = "$subnet.$octet"
+                val name = snapcastServerName(ip, rpcPort, timeoutMs)
+                if (name != null) synchronized(found) { found.add(ip to name) }
+            }
+        }
+        jobs.forEach { it.await() }
+        found.sortedBy { it.first }
+    }
+
+    /**
+     * Tries to connect to a Snapcast RPC port and fetch the server name.
+     * Returns the server name string, or null if not a Snapcast server.
+     */
+    suspend fun snapcastServerName(
+        ip: String,
+        rpcPort: Int = 1705,
+        timeoutMs: Int = 500
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val rpc = """{"jsonrpc":"2.0","id":1,"method":"Server.GetStatus","params":{}}""" + "\n"
+            val response = StringBuilder()
+            Socket().use { sock ->
+                sock.connect(java.net.InetSocketAddress(ip, rpcPort), timeoutMs)
+                sock.soTimeout = timeoutMs
+                sock.getOutputStream().write(rpc.toByteArray())
+                val reader = sock.getInputStream().bufferedReader()
+                val line = reader.readLine() ?: return@withContext null
+                response.append(line)
+            }
+            // Parse server name from response
+            val json   = JSONObject(response.toString())
+            val result = json.optJSONObject("result") ?: return@withContext null
+            val server = result.optJSONObject("server") ?: return@withContext null
+            val host   = server.optJSONObject("host")  ?: return@withContext null
+            host.optString("name", ip).ifEmpty { ip }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     // ── Volume via Snapcast JSON-RPC (port 1705) ──────────────────────────────
 
     suspend fun setVolume(clientId: String, percent: Int): Boolean =
