@@ -170,14 +170,11 @@ class TvActivity : FragmentActivity() {
     }
 
     private fun openSpotify() {
-        // Launch Spotify with no URI so it opens to the active Now Playing session
-        // rather than routing to a track browse page.
-        try {
-            startActivity(
-                packageManager.getLaunchIntentForPackage("com.spotify.music")
-                    ?: throw Exception("not installed")
-            )
-        } catch (_: Exception) { }
+        // Try TV package first, then phone package
+        for (pkg in listOf("com.spotify.tv.android", "com.spotify.music")) {
+            val intent = packageManager.getLaunchIntentForPackage(pkg) ?: continue
+            try { startActivity(intent); return } catch (_: Exception) { }
+        }
     }
 
     private fun fmtMs(ms: Long): String {
