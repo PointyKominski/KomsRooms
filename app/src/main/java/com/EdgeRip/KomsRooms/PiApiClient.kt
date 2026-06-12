@@ -12,8 +12,8 @@ import java.net.Socket
 import java.net.URL
 
 /**
- * All HTTP calls to the Pi's snapcastbt web UI and go-librespot HTTP API.
- * Uses only Android's built-in HttpURLConnection — no external HTTP library needed.
+ * All network calls to the Pi's snapcastbt web UI (port 8080).
+ * Everything goes through port 8080 — no direct port 3678 access needed.
  */
 object PiApiClient {
 
@@ -21,50 +21,33 @@ object PiApiClient {
     var webPort: Int   = 8080
     var snapPort: Int  = 1704
 
-    private val librespotBase get() = "http://$piIp:3678"
-    private val webBase       get() = "http://$piIp:$webPort"
+    private val webBase get() = "http://$piIp:$webPort"
 
     // ── Player state ─────────────────────────────────────────────────────────
+    // Routes through webBase/api/player (web UI proxies to go-librespot).
+    // This works from any network location — only port 8080 needs to be reachable.
 
     suspend fun getStatus(): PlayerState = withContext(Dispatchers.IO) {
         try {
-            val json = get("$librespotBase/status") ?: return@withContext PlayerState(
-                connected = false, error = "No response from go-librespot"
+            val json = get("$webBase/api/player") ?: return@withContext PlayerState(
+                connected = false, error = "No response from server"
             )
-            val data  = JSONObject(json)
-            val track = data.optJSONObject("track")
-
-            val title = track?.optString("name", "") ?: ""
-
-            val artistNames = track?.optJSONArray("artist_names")
-            val artist = buildString {
-                if (artistNames != null) {
-                    for (i in 0 until artistNames.length()) {
-                        if (i > 0) append(", ")
-                        append(artistNames.getString(i))
-                    }
-                }
-            }
-
-            val album    = track?.optString("album_name", "") ?: ""
-            val artUrl   = track?.optString("album_cover_url")?.ifEmpty { null }
-            val posMs    = track?.optLong("position", 0L) ?: 0L
-            val durMs    = track?.optLong("duration",  0L) ?: 0L
-            val paused   = data.optBoolean("paused",  false)
-            val stopped  = data.optBoolean("stopped", false)
-            val trackUri = track?.optString("uri")?.ifEmpty { null }
+            val data = JSONObject(json)
+            if (!data.optBoolean("ok", false)) return@withContext PlayerState(
+                connected = false, error = data.optString("error", "Server error")
+            )
 
             PlayerState(
-                title      = title,
-                artist     = artist,
-                album      = album,
-                artUrl     = artUrl,
-                positionMs = posMs,
-                durationMs = durMs,
-                playing    = !paused && !stopped,
-                hasTrack   = title.isNotEmpty(),
+                title      = data.optString("title",    ""),
+                artist     = data.optString("artist",   ""),
+                album      = data.optString("album",    ""),
+                artUrl     = data.optString("art_url",  "").ifEmpty { null },
+                positionMs = data.optLong("position_ms", 0L),
+                durationMs = data.optLong("duration_ms", 0L),
+                playing    = data.optBoolean("playing",   false),
+                hasTrack   = data.optBoolean("has_track", false),
                 connected  = true,
-                trackUri   = trackUri
+                trackUri   = data.optString("track_uri", "").ifEmpty { null }
             )
         } catch (e: Exception) {
             PlayerState(connected = false, error = e.message)
@@ -91,21 +74,13 @@ object PiApiClient {
 
     // ── Snapcast server discovery via direct TCP (no mDNS) ───────────────────
 
-    /**
-     * Scans the given subnet (e.g. "192.168.1") for hosts responding to
-     * the Snapcast JSON-RPC on port 1705. For each host found, fetches
-     * the server name via Server.GetStatus.
-     * Returns a list of (ip, serverName) pairs.
-     */
     suspend fun scanForServers(
-        subnet: String,          // e.g. "192.168.1"
+        subnet: String,
         rpcPort: Int = 1705,
         timeoutMs: Int = 500
     ): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val found = mutableListOf<Pair<String, String>>()
-        // Scan in batches of 32 to avoid overwhelming the device's network stack
-        // with 254 simultaneous TCP connections
-        kotlinx.coroutines.coroutineScope {
+        coroutineScope {
             (1..254).chunked(32).forEach { batch ->
                 val jobs = batch.map { octet ->
                     async {
@@ -121,10 +96,9 @@ object PiApiClient {
     }
 
     /**
-     * Tries to connect to a server on port 1705 (audio server RPC).
-     * If confirmed, queries /api/info on port 8080 for the friendly server name.
-     * Falls back to hostname from RPC if /api/info is unavailable.
-     * Returns the display name, or null if not an audio server.
+     * Confirms a host is a KomsRoom server (port 1705 responds to Snapcast RPC),
+     * then fetches the friendly name from /api/info on port 8080.
+     * Falls back to the Snapcast server hostname if /api/info is unavailable.
      */
     suspend fun snapcastServerName(
         ip: String,
@@ -132,7 +106,7 @@ object PiApiClient {
         timeoutMs: Int = 500
     ): String? = withContext(Dispatchers.IO) {
         try {
-            // Step 1: confirm this is an audio server via RPC
+            // Step 1: quick check — confirm Snapcast RPC responds (fast, uses timeoutMs)
             val rpc = """{"jsonrpc":"2.0","id":1,"method":"Server.GetStatus","params":{}}""" + "\n"
             val rpcResponse = StringBuilder()
             Socket().use { sock ->
@@ -144,27 +118,26 @@ object PiApiClient {
                 rpcResponse.append(line)
             }
 
-            // Step 2: try /api/info on port 8080 for the friendly server name
+            // Step 2: fetch friendly name from /api/info (longer timeout — Python web server)
             try {
-                val url = java.net.URL("http://$ip:8080/api/info")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = timeoutMs
-                conn.readTimeout    = timeoutMs
+                val conn = URL("http://$ip:8080/api/info").openConnection() as HttpURLConnection
+                conn.connectTimeout = 1500
+                conn.readTimeout    = 1500
                 if (conn.responseCode == 200) {
-                    val body = conn.inputStream.bufferedReader().readText()
-                    val info = JSONObject(body)
-                    val name = info.optString("server_name", "").trim()
+                    val name = JSONObject(conn.inputStream.bufferedReader().readText())
+                        .optString("server_name", "").trim()
                     if (name.isNotEmpty()) return@withContext name
                 }
-            } catch (_: Exception) { /* fall through to RPC hostname */ }
+            } catch (_: Exception) { }
 
             // Step 3: fall back to hostname from RPC response
+            // Snapcast Server.GetStatus: result.server.host.name
             val json   = JSONObject(rpcResponse.toString())
             val result = json.optJSONObject("result") ?: return@withContext ip
             val server = result.optJSONObject("server") ?: return@withContext ip
             val host   = server.optJSONObject("host")  ?: return@withContext ip
             host.optString("name", ip).ifEmpty { ip }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -185,7 +158,8 @@ object PiApiClient {
 
     /**
      * Mute or unmute the Snapcast client whose host IP matches [deviceIp].
-     * Looks up the client ID from Server.GetStatus, preserves current volume %.
+     * Falls back to the first connected client if no IP match is found.
+     * Groups live at result.groups (NOT result.server.groups).
      */
     suspend fun muteClient(deviceIp: String, muted: Boolean, rpcPort: Int = 1705): Boolean =
         withContext(Dispatchers.IO) {
@@ -198,29 +172,37 @@ object PiApiClient {
                     sock.getInputStream().bufferedReader().readLine()
                 } ?: return@withContext false
 
+                // groups are at result.groups, not result.server.groups
                 val groups = JSONObject(line)
                     .optJSONObject("result")
-                    ?.optJSONObject("server")
                     ?.optJSONArray("groups") ?: return@withContext false
+
+                // Collect all clients; prefer IP match, fall back to first connected
+                data class ClientEntry(val id: String, val percent: Int, val ipMatch: Boolean)
+                val candidates = mutableListOf<ClientEntry>()
 
                 for (i in 0 until groups.length()) {
                     val clients = groups.getJSONObject(i).optJSONArray("clients") ?: continue
                     for (j in 0 until clients.length()) {
                         val client  = clients.getJSONObject(j)
+                        if (!client.optBoolean("connected", true)) continue
                         val hostIp  = client.optJSONObject("host")?.optString("ip", "") ?: ""
-                        if (hostIp != deviceIp) continue
                         val id      = client.optString("id", "")
                         val percent = client.optJSONObject("config")
                             ?.optJSONObject("volume")?.optInt("percent", 100) ?: 100
-                        Socket(piIp, rpcPort).use { sock ->
-                            val cmd = """{"jsonrpc":"2.0","id":2,"method":"Client.SetVolume",""" +
-                                      """"params":{"id":"$id","volume":{"percent":$percent,"muted":$muted}}}""" + "\n"
-                            sock.getOutputStream().write(cmd.toByteArray())
-                        }
-                        return@withContext true
+                        candidates.add(ClientEntry(id, percent, hostIp == deviceIp))
                     }
                 }
-                false
+
+                val target = candidates.firstOrNull { it.ipMatch } ?: candidates.firstOrNull()
+                    ?: return@withContext false
+
+                Socket(piIp, rpcPort).use { sock ->
+                    val cmd = """{"jsonrpc":"2.0","id":2,"method":"Client.SetVolume",""" +
+                              """"params":{"id":"${target.id}","volume":{"percent":${target.percent},"muted":$muted}}}""" + "\n"
+                    sock.getOutputStream().write(cmd.toByteArray())
+                }
+                true
             } catch (e: Exception) { false }
         }
 
