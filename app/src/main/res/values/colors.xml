@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Backgrounds — deep dark matching web UI -->
+    <!-- Backgrounds -->
     <color name="bg_dark">#FF05070D</color>
     <color name="surface">#FF0A0D15</color>
     <color name="btn_bg">#FF141622</color>
 
-    <!-- Primary accent — red, matches web UI --accent -->
+    <!-- Primary accent: red -->
     <color name="accent">#FFED3346</color>
 
-    <!-- Purple — latency / secondary controls, matches web UI --accent2 -->
+    <!-- Secondary accent: purple for latency controls -->
     <color name="accent_purple">#FFA64DF0</color>
 
-    <!-- Green — connection indicators, matches web UI --ok -->
+    <!-- Connection indicator green -->
     <color name="ok_green">#FF24DD6B</color>
 
     <!-- Text -->
