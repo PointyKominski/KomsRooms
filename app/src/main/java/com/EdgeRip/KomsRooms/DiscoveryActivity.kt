@@ -94,7 +94,7 @@ class DiscoveryActivity : AppCompatActivity() {
         binding.tvScanStatus.text = "Scanning $subnet.0/24…"
 
         lifecycleScope.launch {
-            val results = PiApiClient.scanForServers(subnet, rpcPort = 1705, timeoutMs = 300)
+            val results = PiApiClient.scanForServers(subnet, rpcPort = 1705, timeoutMs = 600)
 
             discoveredServers.clear()
             results.forEach { (ip, name) ->
