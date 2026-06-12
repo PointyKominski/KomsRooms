@@ -1,6 +1,8 @@
 package com.EdgeRip.KomsRooms
 
+import android.content.Intent
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
@@ -28,6 +30,7 @@ class TvActivity : FragmentActivity() {
     private lateinit var binding: ActivityTvBinding
     private lateinit var vm: MainViewModel
     private var isMuted = false
+    private var currentTrackUri: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +58,9 @@ class TvActivity : FragmentActivity() {
             if (deviceIp != null) vm.muteSnapClient(deviceIp, isMuted)
             updateMuteButton()
         }
+
+        // Open Spotify to the currently playing track (or just Spotify if no track)
+        binding.tvOpenSpotify.setOnClickListener { openSpotify() }
 
         updateMuteButton()
         observePlayerState()
@@ -101,6 +107,7 @@ class TvActivity : FragmentActivity() {
                 binding.tvArtist.text = state.artist.ifEmpty { "Connect" }
                 binding.tvAlbum.text  = state.album
 
+                currentTrackUri = state.trackUri
                 binding.btnPlayPause.text = if (state.playing) "⏸" else "▶"
 
                 if (state.durationMs > 0) {
@@ -145,6 +152,20 @@ class TvActivity : FragmentActivity() {
         binding.btnPrev.setOnClickListener      { vm.playerCommand("prev") }
         binding.btnPlayPause.setOnClickListener { vm.playerCommand("toggle") }
         binding.btnNext.setOnClickListener      { vm.playerCommand("next") }
+    }
+
+    private fun openSpotify() {
+        val uri = currentTrackUri ?: "spotify:"
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                setPackage("com.spotify.music")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (_: Exception) {
+            // Spotify not installed — try generic URI handler
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("spotify:"))) }
+            catch (_: Exception) { }
+        }
     }
 
     private fun fmtMs(ms: Long): String {

@@ -46,12 +46,13 @@ object PiApiClient {
                 }
             }
 
-            val album   = track?.optString("album_name", "") ?: ""
-            val artUrl  = track?.optString("album_cover_url")?.ifEmpty { null }
-            val posMs   = track?.optLong("position", 0L) ?: 0L
-            val durMs   = track?.optLong("duration",  0L) ?: 0L
-            val paused  = data.optBoolean("paused",  false)
-            val stopped = data.optBoolean("stopped", false)
+            val album    = track?.optString("album_name", "") ?: ""
+            val artUrl   = track?.optString("album_cover_url")?.ifEmpty { null }
+            val posMs    = track?.optLong("position", 0L) ?: 0L
+            val durMs    = track?.optLong("duration",  0L) ?: 0L
+            val paused   = data.optBoolean("paused",  false)
+            val stopped  = data.optBoolean("stopped", false)
+            val trackUri = track?.optString("uri")?.ifEmpty { null }
 
             PlayerState(
                 title      = title,
@@ -62,7 +63,8 @@ object PiApiClient {
                 durationMs = durMs,
                 playing    = !paused && !stopped,
                 hasTrack   = title.isNotEmpty(),
-                connected  = true
+                connected  = true,
+                trackUri   = trackUri
             )
         } catch (e: Exception) {
             PlayerState(connected = false, error = e.message)

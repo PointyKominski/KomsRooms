@@ -10,5 +10,6 @@ data class PlayerState(
     val playing: Boolean    = false,
     val hasTrack: Boolean   = false,
     val connected: Boolean  = false,
-    val error: String?      = null
+    val error: String?      = null,
+    val trackUri: String?   = null   // e.g. "spotify:track:XXXX"
 )
