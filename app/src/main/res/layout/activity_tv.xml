@@ -101,6 +101,22 @@
             android:paddingStart="8dp"
             android:paddingEnd="12dp" />
 
+        <!-- Open web UI in browser -->
+        <TextView
+            android:id="@+id/tvOpenWebUi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🌐 Web UI"
+            android:textColor="#99FFFFFF"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/tv_focus_bg"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="12dp" />
+
         <!-- Tap to go back to server list -->
         <TextView
             android:id="@+id/tvChangeServer"

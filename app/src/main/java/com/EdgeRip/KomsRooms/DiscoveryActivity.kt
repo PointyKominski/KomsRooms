@@ -55,7 +55,16 @@ class DiscoveryActivity : AppCompatActivity() {
         if (vm.isConfigured) {
             binding.lastServerCard.visibility = View.VISIBLE
             binding.tvLastServer.text = vm.savedIp
-            binding.btnReconnect.setOnClickListener { launchPlayer() }
+            binding.btnReconnect.setOnClickListener {
+                // If snapclient is already running for this server, don't restart it —
+                // bring the existing TvActivity to front so music keeps playing uninterrupted.
+                if (PiApiClient.piIp.isNotEmpty() && PiApiClient.piIp == vm.savedIp) {
+                    launchPlayer(reorderToFront = true)
+                } else {
+                    vm.reconnectSaved()
+                    launchPlayer()
+                }
+            }
         }
 
         adapter = ServerListAdapter(discoveredServers) { server ->
@@ -204,9 +213,11 @@ class DiscoveryActivity : AppCompatActivity() {
         assets.open(name).bufferedReader().readLine()?.trim()
     } catch (e: Exception) { null }
 
-    private fun launchPlayer() {
+    private fun launchPlayer(reorderToFront: Boolean = false) {
         val uiModeManager = getSystemService(UI_MODE_SERVICE) as UiModeManager
         val isTV = uiModeManager.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
-        startActivity(Intent(this, if (isTV) TvActivity::class.java else MainActivity::class.java))
+        val intent = Intent(this, if (isTV) TvActivity::class.java else MainActivity::class.java)
+        if (reorderToFront) intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        startActivity(intent)
     }
 }

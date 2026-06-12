@@ -62,11 +62,26 @@ class TvActivity : FragmentActivity() {
         // Open Spotify to the currently playing track (or just Spotify if no track)
         binding.tvOpenSpotify.setOnClickListener { openSpotify() }
 
+        // Open the snapcastbt web UI in the default browser
+        binding.tvOpenWebUi.setOnClickListener {
+            val url = "http://${vm.savedIp}:${vm.savedWebPort}"
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (_: Exception) { }
+        }
+
         updateMuteButton()
         observePlayerState()
         wireControls()
 
         binding.btnPlayPause.requestFocus()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        vm.ensurePolling()
     }
 
     private fun localIp(): String? = try {
