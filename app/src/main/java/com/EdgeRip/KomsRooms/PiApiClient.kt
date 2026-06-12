@@ -172,12 +172,14 @@ object PiApiClient {
                     sock.getInputStream().bufferedReader().readLine()
                 } ?: return@withContext false
 
-                // groups are at result.groups, not result.server.groups
+                // groups are at result.server.groups
                 val groups = JSONObject(line)
                     .optJSONObject("result")
+                    ?.optJSONObject("server")
                     ?.optJSONArray("groups") ?: return@withContext false
 
-                // Collect all clients; prefer IP match, fall back to first connected
+                // Collect all clients; prefer IP match, fall back to first connected.
+                // Snapcast stores IPs as IPv6-mapped (::ffff:x.x.x.x) — strip prefix before comparing.
                 data class ClientEntry(val id: String, val percent: Int, val ipMatch: Boolean)
                 val candidates = mutableListOf<ClientEntry>()
 
@@ -186,7 +188,8 @@ object PiApiClient {
                     for (j in 0 until clients.length()) {
                         val client  = clients.getJSONObject(j)
                         if (!client.optBoolean("connected", true)) continue
-                        val hostIp  = client.optJSONObject("host")?.optString("ip", "") ?: ""
+                        val rawIp   = client.optJSONObject("host")?.optString("ip", "") ?: ""
+                        val hostIp  = rawIp.removePrefix("::ffff:")
                         val id      = client.optString("id", "")
                         val percent = client.optJSONObject("config")
                             ?.optJSONObject("volume")?.optInt("percent", 100) ?: 100
