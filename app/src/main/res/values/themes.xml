@@ -3,7 +3,9 @@
     <style name="Theme.KomsRooms" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/accent</item>
         <item name="colorPrimaryVariant">@color/surface</item>
+        <item name="colorSecondary">@color/accent_purple</item>
         <item name="colorOnPrimary">@color/white</item>
+        <item name="colorOnSecondary">@color/white</item>
         <item name="android:windowBackground">@color/bg_dark</item>
         <item name="android:statusBarColor">@color/bg_dark</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>

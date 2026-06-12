@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_dark">#FF0D0D0D</color>
-    <color name="surface">#FF1A1A2E</color>
-    <color name="accent">#FF8B5CF6</color>
+    <!-- Backgrounds — deep dark matching web UI -->
+    <color name="bg_dark">#FF05070D</color>
+    <color name="surface">#FF0A0D15</color>
+    <color name="btn_bg">#FF141622</color>
+
+    <!-- Primary accent — red, matches web UI --accent -->
+    <color name="accent">#FFED3346</color>
+
+    <!-- Purple — latency / secondary controls, matches web UI --accent2 -->
+    <color name="accent_purple">#FFA64DF0</color>
+
+    <!-- Green — connection indicators, matches web UI --ok -->
+    <color name="ok_green">#FF24DD6B</color>
+
+    <!-- Text -->
     <color name="white">#FFFFFFFF</color>
-    <color name="text_secondary">#FFB0B0C0</color>
-    <color name="text_hint">#FF707080</color>
-    <color name="btn_bg">#FF2A2A3E</color>
+    <color name="text_secondary">#FFA4A9B8</color>
+    <color name="text_hint">#FF666C7C</color>
 </resources>
