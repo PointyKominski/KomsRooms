@@ -90,8 +90,9 @@ class DiscoveryActivity : AppCompatActivity() {
             return
         }
 
-        // Show the subnet being scanned so the user can verify it's the right network
-        binding.tvScanStatus.text = "Scanning $subnet.0/24…"
+        // Show this device's full IP + subnet so the user can verify it matches the Pi's network
+        val myIp = localIp() ?: "$subnet.?"
+        binding.tvScanStatus.text = "Scanning $subnet.0/24  (this device: $myIp)…"
 
         lifecycleScope.launch {
             val results = PiApiClient.scanForServers(subnet, rpcPort = 1705, timeoutMs = 600)
@@ -153,6 +154,24 @@ class DiscoveryActivity : AppCompatActivity() {
             val c = (ip shr 16) and 0xFF
             "$a.$b.$c"
         } catch (_: Exception) { null }
+    }
+
+    /** Returns this device's full IPv4 address, e.g. "192.168.1.42". */
+    private fun localIp(): String? {
+        try {
+            val ifaces = java.net.NetworkInterface.getNetworkInterfaces()
+            if (ifaces != null) {
+                for (iface in ifaces.asSequence()) {
+                    if (!iface.isUp || iface.isLoopback) continue
+                    for (addr in iface.inetAddresses.asSequence()) {
+                        if (addr is java.net.Inet4Address && !addr.isLoopbackAddress && !addr.isLinkLocalAddress) {
+                            return addr.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return null
     }
 
     override fun onResume() {

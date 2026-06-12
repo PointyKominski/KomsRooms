@@ -69,6 +69,19 @@
             android:textColor="@color/text_hint"
             android:textSize="13sp" />
 
+        <!-- Stop audio on this Chromecast so it can be used for other apps -->
+        <TextView
+            android:id="@+id/tvStopAudio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⏹ Stop audio"
+            android:textColor="#f87171"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp" />
+
         <!-- Tap to go back to server list -->
         <TextView
             android:id="@+id/tvChangeServer"
@@ -79,7 +92,7 @@
             android:textSize="13sp"
             android:clickable="true"
             android:focusable="true"
-            android:paddingStart="16dp"
+            android:paddingStart="8dp"
             android:paddingEnd="4dp" />
 
     </LinearLayout>

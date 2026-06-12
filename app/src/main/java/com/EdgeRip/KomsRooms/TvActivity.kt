@@ -48,6 +48,13 @@ class TvActivity : FragmentActivity() {
             finish() // returns to DiscoveryActivity
         }
 
+        // "Stop audio" — kills snapclient on this device so the Chromecast is
+        // freed for other apps. The server keeps running; reconnect any time.
+        binding.tvStopAudio.setOnClickListener {
+            vm.disconnect()
+            finish()
+        }
+
         observePlayerState()
         wireControls()
 
