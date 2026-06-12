@@ -84,7 +84,7 @@
                     android:id="@+id/etWebPort"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="5900"
+                    android:text="8080"
                     android:inputType="number"
                     android:textColor="@color/white"
                     android:textColorHint="@color/text_hint"

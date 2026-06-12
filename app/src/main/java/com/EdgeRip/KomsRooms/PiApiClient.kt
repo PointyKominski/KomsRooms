@@ -18,7 +18,7 @@ import java.net.URL
 object PiApiClient {
 
     var piIp: String   = ""
-    var webPort: Int   = 5900
+    var webPort: Int   = 8080
     var snapPort: Int  = 1704
 
     private val librespotBase get() = "http://$piIp:3678"

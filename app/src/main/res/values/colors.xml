@@ -5,8 +5,8 @@
     <color name="surface">#FF0A0D15</color>
     <color name="btn_bg">#FF141622</color>
 
-    <!-- Primary accent: red -->
-    <color name="accent">#FFED3346</color>
+    <!-- Primary accent: blue -->
+    <color name="accent">#FF4B8BFF</color>
 
     <!-- Secondary accent: purple for latency controls -->
     <color name="accent_purple">#FFA64DF0</color>

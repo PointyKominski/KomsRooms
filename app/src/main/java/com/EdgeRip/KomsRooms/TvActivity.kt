@@ -48,11 +48,9 @@ class TvActivity : FragmentActivity() {
             finish() // returns to DiscoveryActivity
         }
 
-        // "Stop audio" — kills snapclient on this device so the Chromecast is
-        // freed for other apps. The server keeps running; reconnect any time.
+        // "Stop / Play audio" — toggles playback without leaving the screen.
         binding.tvStopAudio.setOnClickListener {
-            vm.disconnect()
-            finish()
+            vm.playerCommand("toggle")
         }
 
         observePlayerState()
@@ -82,6 +80,7 @@ class TvActivity : FragmentActivity() {
                 binding.tvAlbum.text  = state.album
 
                 binding.btnPlayPause.text = if (state.playing) "⏸" else "▶"
+                binding.tvStopAudio.text  = if (state.playing) "⏹ Stop audio" else "▶ Play audio"
 
                 if (state.durationMs > 0) {
                     binding.progressBar.max      = state.durationMs.toInt()

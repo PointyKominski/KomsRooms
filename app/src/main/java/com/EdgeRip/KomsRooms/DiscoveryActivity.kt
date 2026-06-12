@@ -40,7 +40,7 @@ class DiscoveryActivity : AppCompatActivity() {
         val name: String,
         val host: String,
         val snapPort: Int = 1704,
-        val webPort: Int = 5900
+        val webPort: Int = 8080
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {

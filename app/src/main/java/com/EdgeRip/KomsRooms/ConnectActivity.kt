@@ -47,7 +47,7 @@ class ConnectActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             val ip       = binding.etIp.text.toString().trim()
-            val webPort  = binding.etWebPort.text.toString().toIntOrNull() ?: 5900
+            val webPort  = binding.etWebPort.text.toString().toIntOrNull() ?: 8080
             val snapPort = binding.etSnapPort.text.toString().toIntOrNull() ?: 1704
 
             if (ip.isEmpty()) {

@@ -32,16 +32,26 @@ class ManualConnectActivity : AppCompatActivity() {
         vm = ViewModelProvider(this)[MainViewModel::class.java]
         devPrefs = getSharedPreferences(SnapclientService.PREFS_NAME, MODE_PRIVATE)
 
-        // Pre-fill saved values
-        if (vm.isConfigured) {
-            binding.etIp.setText(vm.savedIp)
-            binding.etWebPort.setText(vm.savedWebPort.toString())
-            binding.etSnapPort.setText(vm.savedSnapPort.toString())
+        // Always pre-fill from saved values if available
+        val savedIp = vm.savedIp
+        if (savedIp.isNotEmpty()) binding.etIp.setText(savedIp)
+        binding.etWebPort.setText((if (vm.savedWebPort > 0) vm.savedWebPort else 8080).toString())
+        binding.etSnapPort.setText((if (vm.savedSnapPort > 0) vm.savedSnapPort else 1704).toString())
+
+        // D-pad right on empty IP field accepts the saved IP
+        binding.etIp.setOnKeyListener { _, keyCode, event ->
+            if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
+                binding.etIp.text.isEmpty() && savedIp.isNotEmpty()) {
+                binding.etIp.setText(savedIp)
+                binding.etIp.setSelection(savedIp.length)
+                true
+            } else false
         }
 
         binding.btnConnect.setOnClickListener {
             val ip       = binding.etIp.text.toString().trim()
-            val webPort  = binding.etWebPort.text.toString().toIntOrNull() ?: 5900
+            val webPort  = binding.etWebPort.text.toString().toIntOrNull() ?: 8080
             val snapPort = binding.etSnapPort.text.toString().toIntOrNull() ?: 1704
             if (ip.isEmpty()) {
                 binding.etIp.error = "Enter the server's IP address"
