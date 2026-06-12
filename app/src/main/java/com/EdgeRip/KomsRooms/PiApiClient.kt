@@ -119,8 +119,10 @@ object PiApiClient {
     }
 
     /**
-     * Tries to connect to a Snapcast RPC port and fetch the server name.
-     * Returns the server name string, or null if not a Snapcast server.
+     * Tries to connect to a server on port 1705 (audio server RPC).
+     * If confirmed, queries /api/info on port 8080 for the friendly server name.
+     * Falls back to hostname from RPC if /api/info is unavailable.
+     * Returns the display name, or null if not an audio server.
      */
     suspend fun snapcastServerName(
         ip: String,
@@ -128,21 +130,37 @@ object PiApiClient {
         timeoutMs: Int = 500
     ): String? = withContext(Dispatchers.IO) {
         try {
+            // Step 1: confirm this is an audio server via RPC
             val rpc = """{"jsonrpc":"2.0","id":1,"method":"Server.GetStatus","params":{}}""" + "\n"
-            val response = StringBuilder()
+            val rpcResponse = StringBuilder()
             Socket().use { sock ->
                 sock.connect(java.net.InetSocketAddress(ip, rpcPort), timeoutMs)
                 sock.soTimeout = timeoutMs
                 sock.getOutputStream().write(rpc.toByteArray())
-                val reader = sock.getInputStream().bufferedReader()
-                val line = reader.readLine() ?: return@withContext null
-                response.append(line)
+                val line = sock.getInputStream().bufferedReader().readLine()
+                    ?: return@withContext null
+                rpcResponse.append(line)
             }
-            // Parse server name from response
-            val json   = JSONObject(response.toString())
-            val result = json.optJSONObject("result") ?: return@withContext null
-            val server = result.optJSONObject("server") ?: return@withContext null
-            val host   = server.optJSONObject("host")  ?: return@withContext null
+
+            // Step 2: try /api/info on port 8080 for the friendly server name
+            try {
+                val url = java.net.URL("http://$ip:8080/api/info")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = timeoutMs
+                conn.readTimeout    = timeoutMs
+                if (conn.responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    val info = JSONObject(body)
+                    val name = info.optString("server_name", "").trim()
+                    if (name.isNotEmpty()) return@withContext name
+                }
+            } catch (_: Exception) { /* fall through to RPC hostname */ }
+
+            // Step 3: fall back to hostname from RPC response
+            val json   = JSONObject(rpcResponse.toString())
+            val result = json.optJSONObject("result") ?: return@withContext ip
+            val server = result.optJSONObject("server") ?: return@withContext ip
+            val host   = server.optJSONObject("host")  ?: return@withContext ip
             host.optString("name", ip).ifEmpty { ip }
         } catch (e: Exception) {
             null
