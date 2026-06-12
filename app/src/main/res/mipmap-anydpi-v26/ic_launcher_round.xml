@@ -3,7 +3,7 @@
     <background android:drawable="@color/bg_dark"/>
     <foreground>
         <bitmap
-            android:src="@drawable/ic_launcher_source"
+            android:src="@drawable/ic_launcher_round_source"
             android:gravity="fill"/>
     </foreground>
 </adaptive-icon>
