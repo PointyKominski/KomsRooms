@@ -27,6 +27,7 @@ class TvActivity : FragmentActivity() {
 
     private lateinit var binding: ActivityTvBinding
     private lateinit var vm: MainViewModel
+    private var isMuted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,9 +36,8 @@ class TvActivity : FragmentActivity() {
 
         vm = ViewModelProvider(this)[MainViewModel::class.java]
 
-        if (PiApiClient.piIp.isEmpty()) {
-            vm.reconnectSaved()
-        }
+        // Always ensure polling starts — ViewModel is a fresh instance per-activity
+        if (PiApiClient.piIp.isEmpty()) vm.reconnectSaved() else vm.ensurePolling()
 
         // Show which server we're connected to
         val ip = vm.savedIp.ifEmpty { "unknown" }
@@ -45,19 +45,41 @@ class TvActivity : FragmentActivity() {
 
         // "Change server" goes back to discovery
         binding.tvChangeServer.setOnClickListener {
-            finish() // returns to DiscoveryActivity
+            finish()
         }
 
-        // "Stop / Play audio" — toggles playback without leaving the screen.
+        // Mute toggle — silences this Snapcast client only, keeps playback running
         binding.tvStopAudio.setOnClickListener {
-            vm.playerCommand("toggle")
+            isMuted = !isMuted
+            val deviceIp = localIp()
+            if (deviceIp != null) vm.muteSnapClient(deviceIp, isMuted)
+            updateMuteButton()
         }
 
+        updateMuteButton()
         observePlayerState()
         wireControls()
 
-        // Give initial D-pad focus to the play/pause button
         binding.btnPlayPause.requestFocus()
+    }
+
+    private fun localIp(): String? = try {
+        java.net.NetworkInterface.getNetworkInterfaces()?.asSequence()
+            ?.filter { it.isUp && !it.isLoopback }
+            ?.flatMap { it.inetAddresses.asSequence() }
+            ?.filterIsInstance<java.net.Inet4Address>()
+            ?.firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+            ?.hostAddress
+    } catch (_: Exception) { null }
+
+    private fun updateMuteButton() {
+        if (isMuted) {
+            binding.tvStopAudio.text = "🔇 Muted"
+            binding.tvStopAudio.setTextColor(android.graphics.Color.parseColor("#f87171"))
+        } else {
+            binding.tvStopAudio.text = "🔊"
+            binding.tvStopAudio.setTextColor(android.graphics.Color.parseColor("#99FFFFFF"))
+        }
     }
 
     private fun observePlayerState() {
@@ -80,7 +102,6 @@ class TvActivity : FragmentActivity() {
                 binding.tvAlbum.text  = state.album
 
                 binding.btnPlayPause.text = if (state.playing) "⏸" else "▶"
-                binding.tvStopAudio.text  = if (state.playing) "⏹ Stop audio" else "▶ Play audio"
 
                 if (state.durationMs > 0) {
                     binding.progressBar.max      = state.durationMs.toInt()

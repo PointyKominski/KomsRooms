@@ -40,7 +40,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         set(v) { prefs.edit().putString("pi_ip", v).apply() }
 
     var savedWebPort: Int
-        get() = prefs.getInt("web_port", 5900)
+        get() = prefs.getInt("web_port", 8080)
         set(v) { prefs.edit().putInt("web_port", v).apply() }
 
     var savedSnapPort: Int
@@ -51,7 +51,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Connect / disconnect ──────────────────────────────────────────────────
 
-    fun connect(ip: String, webPort: Int = 5900, snapPort: Int = 1704) {
+    fun connect(ip: String, webPort: Int = 8080, snapPort: Int = 1704) {
         savedIp       = ip
         savedWebPort  = webPort
         savedSnapPort = snapPort
@@ -91,8 +91,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun ensurePolling() {
+        if (pollJob == null || pollJob?.isActive == false) {
+            startPolling()
+        }
+    }
+
     fun setVolume(clientId: String, percent: Int) {
         viewModelScope.launch { PiApiClient.setVolume(clientId, percent) }
+    }
+
+    fun muteSnapClient(deviceIp: String, muted: Boolean) {
+        viewModelScope.launch { PiApiClient.muteClient(deviceIp, muted) }
     }
 
     // ── EQ ───────────────────────────────────────────────────────────────────

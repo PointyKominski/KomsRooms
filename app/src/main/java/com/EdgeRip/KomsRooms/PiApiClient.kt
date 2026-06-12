@@ -167,7 +167,7 @@ object PiApiClient {
         }
     }
 
-    // ── Volume via Snapcast JSON-RPC (port 1705) ──────────────────────────────
+    // ── Volume / mute via Snapcast JSON-RPC (port 1705) ──────────────────────
 
     suspend fun setVolume(clientId: String, percent: Int): Boolean =
         withContext(Dispatchers.IO) {
@@ -178,6 +178,47 @@ object PiApiClient {
                     sock.getOutputStream().write(rpc.toByteArray())
                 }
                 true
+            } catch (e: Exception) { false }
+        }
+
+    /**
+     * Mute or unmute the Snapcast client whose host IP matches [deviceIp].
+     * Looks up the client ID from Server.GetStatus, preserves current volume %.
+     */
+    suspend fun muteClient(deviceIp: String, muted: Boolean, rpcPort: Int = 1705): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val rpc = """{"jsonrpc":"2.0","id":1,"method":"Server.GetStatus","params":{}}""" + "\n"
+                val line = Socket().use { sock ->
+                    sock.connect(java.net.InetSocketAddress(piIp, rpcPort), 2000)
+                    sock.soTimeout = 2000
+                    sock.getOutputStream().write(rpc.toByteArray())
+                    sock.getInputStream().bufferedReader().readLine()
+                } ?: return@withContext false
+
+                val groups = JSONObject(line)
+                    .optJSONObject("result")
+                    ?.optJSONObject("server")
+                    ?.optJSONArray("groups") ?: return@withContext false
+
+                for (i in 0 until groups.length()) {
+                    val clients = groups.getJSONObject(i).optJSONArray("clients") ?: continue
+                    for (j in 0 until clients.length()) {
+                        val client  = clients.getJSONObject(j)
+                        val hostIp  = client.optJSONObject("host")?.optString("ip", "") ?: ""
+                        if (hostIp != deviceIp) continue
+                        val id      = client.optString("id", "")
+                        val percent = client.optJSONObject("config")
+                            ?.optJSONObject("volume")?.optInt("percent", 100) ?: 100
+                        Socket(piIp, rpcPort).use { sock ->
+                            val cmd = """{"jsonrpc":"2.0","id":2,"method":"Client.SetVolume",""" +
+                                      """"params":{"id":"$id","volume":{"percent":$percent,"muted":$muted}}}""" + "\n"
+                            sock.getOutputStream().write(cmd.toByteArray())
+                        }
+                        return@withContext true
+                    }
+                }
+                false
             } catch (e: Exception) { false }
         }
 
