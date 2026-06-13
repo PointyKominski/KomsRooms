@@ -60,6 +60,10 @@ object PiApiClient {
         post("$webBase/api/player/$cmd", "{}") != null
     }
 
+    suspend fun playerSeek(positionMs: Long): Boolean = withContext(Dispatchers.IO) {
+        post("$webBase/api/player/seek", """{"position_ms":$positionMs}""") != null
+    }
+
     // ── EQ ───────────────────────────────────────────────────────────────────
 
     suspend fun setEq(clientId: String, bands: Map<String, Float>): Boolean =

@@ -91,6 +91,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun playerSeek(positionMs: Long) {
+        viewModelScope.launch {
+            PiApiClient.playerSeek(positionMs)
+            delay(300)
+            refreshNow()
+        }
+    }
+
     fun ensurePolling() {
         if (pollJob == null || pollJob?.isActive == false) {
             startPolling()

@@ -164,11 +164,20 @@ class TvActivity : FragmentActivity() {
     }
 
     private fun wireControls() {
-        binding.btnPrev.setOnClickListener  { vm.playerCommand("prev") }
+        binding.btnPrev.setOnClickListener  { handlePrev() }
         binding.btnPlay.setOnClickListener  { vm.playerCommand("play") }
         binding.btnPause.setOnClickListener { vm.playerCommand("pause") }
         binding.btnStop.setOnClickListener  { vm.playerCommand("stop") }
         binding.btnNext.setOnClickListener  { vm.playerCommand("next") }
+    }
+
+    private fun handlePrev() {
+        val posMs = vm.player.value.positionMs
+        if (posMs > 5_000L) {
+            vm.playerSeek(0L)
+        } else {
+            vm.playerCommand("prev")
+        }
     }
 
     private fun openSpotify() {
