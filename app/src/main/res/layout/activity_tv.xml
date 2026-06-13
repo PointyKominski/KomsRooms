@@ -220,48 +220,76 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <!-- Transport controls — large, focusable for remote navigation -->
+        <!-- Metallic transport strip — prev / play / pause / stop / next -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:padding="6dp"
+            android:background="@drawable/metal_transport_bg">
 
-            <Button
+            <ImageButton
                 android:id="@+id/btnPrev"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:text="⏮"
-                android:textSize="28sp"
-                android:backgroundTint="@color/btn_bg"
-                android:textColor="@color/white"
+                android:layout_width="64dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_transport_prev"
+                android:scaleType="center"
+                android:background="@drawable/metal_btn_selector"
                 android:focusable="true"
-                android:nextFocusRight="@id/btnPlayPause"
-                android:layout_marginEnd="16dp" />
+                android:contentDescription="Previous"
+                android:nextFocusRight="@id/btnPlay"
+                android:layout_marginEnd="4dp" />
 
-            <Button
-                android:id="@+id/btnPlayPause"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:text="▶"
-                android:textSize="36sp"
-                android:backgroundTint="@color/accent"
-                android:textColor="@color/white"
+            <ImageButton
+                android:id="@+id/btnPlay"
+                android:layout_width="76dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_transport_play"
+                android:scaleType="center"
+                android:background="@drawable/metal_btn_primary_selector"
                 android:focusable="true"
+                android:contentDescription="Play"
                 android:nextFocusLeft="@id/btnPrev"
-                android:nextFocusRight="@id/btnNext"
-                android:layout_marginEnd="16dp" />
+                android:nextFocusRight="@id/btnPause"
+                android:layout_marginEnd="4dp" />
 
-            <Button
-                android:id="@+id/btnNext"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:text="⏭"
-                android:textSize="28sp"
-                android:backgroundTint="@color/btn_bg"
-                android:textColor="@color/white"
+            <ImageButton
+                android:id="@+id/btnPause"
+                android:layout_width="64dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_transport_pause"
+                android:scaleType="center"
+                android:background="@drawable/metal_btn_selector"
                 android:focusable="true"
-                android:nextFocusLeft="@id/btnPlayPause" />
+                android:contentDescription="Pause"
+                android:nextFocusLeft="@id/btnPlay"
+                android:nextFocusRight="@id/btnStop"
+                android:layout_marginEnd="4dp" />
+
+            <ImageButton
+                android:id="@+id/btnStop"
+                android:layout_width="64dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_transport_stop"
+                android:scaleType="center"
+                android:background="@drawable/metal_btn_selector"
+                android:focusable="true"
+                android:contentDescription="Stop"
+                android:nextFocusLeft="@id/btnPause"
+                android:nextFocusRight="@id/btnNext"
+                android:layout_marginEnd="4dp" />
+
+            <ImageButton
+                android:id="@+id/btnNext"
+                android:layout_width="64dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_transport_next"
+                android:scaleType="center"
+                android:background="@drawable/metal_btn_selector"
+                android:focusable="true"
+                android:contentDescription="Next"
+                android:nextFocusLeft="@id/btnStop" />
 
         </LinearLayout>
 

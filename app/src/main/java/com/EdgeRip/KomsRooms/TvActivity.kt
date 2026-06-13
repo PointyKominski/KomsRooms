@@ -76,7 +76,7 @@ class TvActivity : FragmentActivity() {
         observePlayerState()
         wireControls()
 
-        binding.btnPlayPause.requestFocus()
+        binding.btnPlay.requestFocus()
     }
 
     override fun onResume() {
@@ -123,7 +123,7 @@ class TvActivity : FragmentActivity() {
                 binding.tvAlbum.text  = state.album
 
                 currentTrackUri = state.trackUri
-                binding.btnPlayPause.text = if (state.playing) "⏸" else "▶"
+                // play/pause/stop are separate buttons — no toggle text needed
 
                 if (state.durationMs > 0) {
                     binding.progressBar.max      = state.durationMs.toInt()
@@ -164,9 +164,11 @@ class TvActivity : FragmentActivity() {
     }
 
     private fun wireControls() {
-        binding.btnPrev.setOnClickListener      { vm.playerCommand("prev") }
-        binding.btnPlayPause.setOnClickListener { vm.playerCommand("toggle") }
-        binding.btnNext.setOnClickListener      { vm.playerCommand("next") }
+        binding.btnPrev.setOnClickListener  { vm.playerCommand("prev") }
+        binding.btnPlay.setOnClickListener  { vm.playerCommand("play") }
+        binding.btnPause.setOnClickListener { vm.playerCommand("pause") }
+        binding.btnStop.setOnClickListener  { vm.playerCommand("stop") }
+        binding.btnNext.setOnClickListener  { vm.playerCommand("next") }
     }
 
     private fun openSpotify() {
