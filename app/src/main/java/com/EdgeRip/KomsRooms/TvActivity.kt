@@ -172,11 +172,23 @@ class TvActivity : FragmentActivity() {
     }
 
     private fun openSpotify() {
-        // Try TV package first, then phone package
-        for (pkg in listOf("com.spotify.tv.android", "com.spotify.music")) {
-            val intent = packageManager.getLaunchIntentForPackage(pkg) ?: continue
-            try { startActivity(intent); return } catch (_: Exception) { }
+        // Resolve whichever Spotify package is installed by asking Android
+        // what handles the spotify: URI scheme, then launch its main entry
+        // point so it opens to the active Now Playing session.
+        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:"))
+        val pkg = packageManager.resolveActivity(probe, 0)?.activityInfo?.packageName
+        if (pkg != null) {
+            try {
+                val launch = packageManager.getLaunchIntentForPackage(pkg)
+                if (launch != null) { startActivity(launch); return }
+            } catch (_: Exception) { }
         }
+        // Fallback: open via URI (lands on home screen but at least opens Spotify)
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("spotify:")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (_: Exception) { }
     }
 
     private fun fmtMs(ms: Long): String {
